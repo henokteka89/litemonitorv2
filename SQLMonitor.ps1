@@ -1050,7 +1050,7 @@ ELSE SELECT 'Query Store not enabled on: $db — enable via: ALTER DATABASE [$db
 "@
 }
 
-function Get-QSRegressedQuery([string]$db){
+function Get-QSRegressedQuery([string]$db,[int]$recentMinutes=30){
 @"
 USE [$db];
 IF EXISTS(SELECT 1 FROM sys.database_query_store_options WHERE actual_state IN (1,2))
@@ -1064,7 +1064,7 @@ BEGIN
     FROM sys.query_store_runtime_stats rs
     JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id=ri.runtime_stats_interval_id
     JOIN sys.query_store_plan p ON rs.plan_id=p.plan_id
-    WHERE ri.start_time >= DATEADD(hour,-24,GETDATE())
+    WHERE ri.start_time >= DATEADD(minute,-$recentMinutes,GETDATE())
     GROUP BY p.query_id
   ),
   baseline AS (
@@ -2047,6 +2047,20 @@ $tabs.TabPages.Add($t12)
 
 Add-RefreshBar $t12 { Refresh-TabQueryStore }
 
+$pnlQSBar = New-Object System.Windows.Forms.Panel
+$pnlQSBar.Dock = 'Top'; $pnlQSBar.Height = 28; $pnlQSBar.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$lblQSWin = New-Object System.Windows.Forms.Label
+$lblQSWin.Text = "Recent window:"; $lblQSWin.ForeColor = [System.Drawing.Color]::Silver
+$lblQSWin.Location = [System.Drawing.Point]::new(8,6); $lblQSWin.Size = [System.Drawing.Size]::new(110,18); $lblQSWin.Font = $monoFont
+$script:cmbQSWindow = New-Object System.Windows.Forms.ComboBox
+$script:cmbQSWindow.DropDownStyle = 'DropDownList'
+$script:cmbQSWindow.Font = $monoFont; $script:cmbQSWindow.ForeColor = [System.Drawing.Color]::White; $script:cmbQSWindow.BackColor = [System.Drawing.Color]::FromArgb(45,45,48)
+$script:cmbQSWindow.Location = [System.Drawing.Point]::new(122,4); $script:cmbQSWindow.Size = [System.Drawing.Size]::new(110,22)
+[void]$script:cmbQSWindow.Items.AddRange(@("Last 30 min","Last 1 hour","Last 2 hours","Last 6 hours"))
+$script:cmbQSWindow.SelectedIndex = 0
+$pnlQSBar.Controls.AddRange(@($lblQSWin,$script:cmbQSWindow))
+$t12.Controls.Add($pnlQSBar)
+
 $hdr12b=New-SectionPanel "Regressed Queries — queries that got slower (recent vs last 7 days, >=50% slower)   DB: master"
 $script:qsTopHdr=$hdr12b.Controls[0]
 $script:gQSReg=New-DGV
@@ -2443,8 +2457,9 @@ function Refresh-TabCapacity {
 function Refresh-TabQueryStore {
     if(-not $script:connected){return}
     $selDB=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-    $script:qsTopHdr.Text="  Regressed Queries — queries that got slower   DB: $selDB   requires SQL 2016+  Query Store must be ON"
-    Bind-Grid $script:gQSReg (Invoke-SqlQuery (Get-QSRegressedQuery $selDB))
+    $mins = switch($script:cmbQSWindow.SelectedIndex){ 0{30} 1{60} 2{120} 3{360} default{30} }
+    $script:qsTopHdr.Text="  Regressed Queries — recent $mins min vs last 30 days   DB: $selDB"
+    Bind-Grid $script:gQSReg (Invoke-SqlQuery -sql (Get-QSRegressedQuery $selDB $mins) -timeout 60)
     Set-Status "Query Store refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
 }
 
@@ -2542,8 +2557,9 @@ $cmbDB.add_SelectedIndexChanged({
         $script:idxHdrLbl.Text = "  Index Fragmentation Health — DB: $selDB  (click Load to refresh)"
         $script:statsHdrLbl.Text = "  Statistics Health — stale stats cause bad query plans   DB: $selDB"
         Bind-Grid $script:gStats (Invoke-SqlQuery (Get-StatsHealthQuery $selDB))
-        $script:qsTopHdr.Text = "  Regressed Queries — DB: $selDB"
-        Bind-Grid $script:gQSReg (Invoke-SqlQuery (Get-QSRegressedQuery $selDB))
+        $mins2 = switch($script:cmbQSWindow.SelectedIndex){ 0{30} 1{60} 2{120} 3{360} default{30} }
+        $script:qsTopHdr.Text = "  Regressed Queries — recent $mins2 min vs last 30 days   DB: $selDB"
+        Bind-Grid $script:gQSReg (Invoke-SqlQuery -sql (Get-QSRegressedQuery $selDB $mins2) -timeout 60)
     }
 })
 
