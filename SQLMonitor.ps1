@@ -1845,8 +1845,26 @@ $split6topH.Panel2.Controls.Add($script:gClerks)
 $split6topH.Panel2.Controls.Add($hdr6e)
 
 # Bottom: buffer pool by database (top 5 default)
-$hdr6d = New-SectionPanel "Buffer Pool by Database (default Top 5)"
+$hdr6d = New-SectionPanel "Buffer Pool by Database — click Load to populate (slow on large servers)"
 $script:gBufDB = New-DGV
+$btnBufLoad = New-Object System.Windows.Forms.Button
+$btnBufLoad.Text = "Load"; $btnBufLoad.Size = New-Object System.Drawing.Size(50,18)
+$btnBufLoad.Location = New-Object System.Drawing.Point(2,4)
+$btnBufLoad.FlatStyle = "Flat"; $btnBufLoad.BackColor = [System.Drawing.Color]::FromArgb(0,98,188)
+$btnBufLoad.ForeColor = [System.Drawing.Color]::White; $btnBufLoad.Font = New-Object System.Drawing.Font("Segoe UI",8)
+$btnBufLoad.Cursor = [System.Windows.Forms.Cursors]::Hand
+$hdr6d.Controls[0].Dock = [System.Windows.Forms.DockStyle]::None
+$hdr6d.Controls[0].Location = New-Object System.Drawing.Point(58,4)
+$hdr6d.Controls[0].Size = New-Object System.Drawing.Size(700,18)
+$hdr6d.Controls.Add($btnBufLoad)
+$btnBufLoad.add_Click({
+    if(-not $script:connected){return}
+    $topN = switch($script:cmbMemTop.SelectedIndex){ 0{5} 1{10} 2{20} 3{50} default{5} }
+    $qBuf = "SET NOCOUNT ON; SET ARITHABORT ON; SELECT TOP $topN CASE WHEN database_id=32767 THEN 'Resource DB' ELSE DB_NAME(database_id) END AS [Database], COUNT(*)*8/1024 AS [Buffer MB], CAST(COUNT(*)*100.0/SUM(COUNT(*)) OVER() AS DECIMAL(5,1)) AS [% of Buffer Pool], SUM(CASE WHEN is_modified=1 THEN 1 ELSE 0 END)*8/1024 AS [Dirty Pages MB] FROM sys.dm_os_buffer_descriptors WITH (NOLOCK) GROUP BY database_id ORDER BY COUNT(*) DESC OPTION (HASH GROUP, RECOMPILE)"
+    Set-Status "Loading Buffer Pool data..." "Yellow"
+    Bind-Grid $script:gBufDB (Invoke-SqlQuery -sql $qBuf -timeout 120)
+    Set-Status "Buffer Pool loaded: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+})
 $split6top.Panel2.Controls.Add($script:gBufDB)
 $split6top.Panel2.Controls.Add($hdr6d)
 
@@ -2345,9 +2363,7 @@ function Refresh-TabIndexesMem {
         foreach($r in $dtMem.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_Memory(ServerName,Metric,Value,Status) VALUES('$srv','$(EscSql $r['Metric'])','$(EscSql $r['Value'])','$(EscSql $r['Status'])')" }
     }
     $topN = switch($script:cmbMemTop.SelectedIndex){ 0{5} 1{10} 2{20} 3{50} default{5} }
-    $qBuf = "SET NOCOUNT ON; SET ARITHABORT ON; SELECT TOP $topN CASE WHEN database_id=32767 THEN 'Resource DB' ELSE DB_NAME(database_id) END AS [Database], COUNT(*)*8/1024 AS [Buffer MB], CAST(COUNT(*)*100.0/SUM(COUNT(*)) OVER() AS DECIMAL(5,1)) AS [% of Buffer Pool], SUM(CASE WHEN is_modified=1 THEN 1 ELSE 0 END)*8/1024 AS [Dirty Pages MB] FROM sys.dm_os_buffer_descriptors WITH (NOLOCK) GROUP BY database_id ORDER BY COUNT(*) DESC OPTION (HASH GROUP, RECOMPILE)"
     $qClk = "SELECT TOP $topN type AS [Clerk Type], name AS [Name], CAST(pages_kb/1024.0 AS DECIMAL(10,1)) AS [Memory MB], CAST(pages_kb*100.0/NULLIF(SUM(pages_kb) OVER(),0) AS DECIMAL(5,1)) AS [% of Total] FROM sys.dm_os_memory_clerks WHERE pages_kb>0 ORDER BY pages_kb DESC"
-    Bind-Grid $script:gBufDB  (Invoke-SqlQuery -sql $qBuf -timeout 120)
     Bind-Grid $script:gClerks (Invoke-SqlQuery $qClk)
     Set-Status "Indexes & Memory refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
 }
