@@ -1056,48 +1056,50 @@ USE [$db];
 IF EXISTS(SELECT 1 FROM sys.database_query_store_options WHERE actual_state IN (1,2))
 BEGIN
   WITH recent AS (
-    SELECT p.query_id,
-      AVG(rs.avg_duration)      AS avg_duration,
-      AVG(rs.avg_cpu_time)      AS avg_cpu,
-      SUM(rs.count_executions)  AS exec_count,
-      AVG(rs.avg_logical_io_reads) AS avg_reads
-    FROM sys.query_store_runtime_stats rs
-    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id=ri.runtime_stats_interval_id
-    JOIN sys.query_store_plan p ON rs.plan_id=p.plan_id
+    SELECT q.query_id, p.plan_id,
+      AVG(rs.avg_duration)         AS avg_duration,
+      AVG(rs.avg_cpu_time)         AS avg_cpu,
+      AVG(rs.avg_logical_io_reads) AS avg_reads,
+      SUM(rs.count_executions)     AS exec_count
+    FROM sys.query_store_query q
+    JOIN sys.query_store_plan p              ON q.query_id  = p.query_id
+    JOIN sys.query_store_runtime_stats rs    ON p.plan_id   = rs.plan_id
+    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id = ri.runtime_stats_interval_id
     WHERE ri.start_time >= DATEADD(minute,-$recentMinutes,GETDATE())
-    GROUP BY p.query_id
+    GROUP BY q.query_id, p.plan_id
   ),
   baseline AS (
-    SELECT p.query_id,
-      AVG(rs.avg_duration)      AS avg_duration,
-      AVG(rs.avg_cpu_time)      AS avg_cpu,
+    SELECT q.query_id,
+      AVG(rs.avg_duration)         AS avg_duration,
+      AVG(rs.avg_cpu_time)         AS avg_cpu,
       AVG(rs.avg_logical_io_reads) AS avg_reads
-    FROM sys.query_store_runtime_stats rs
-    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id=ri.runtime_stats_interval_id
-    JOIN sys.query_store_plan p ON rs.plan_id=p.plan_id
-    WHERE ri.start_time BETWEEN DATEADD(day,-30,GETDATE()) AND DATEADD(hour,-24,GETDATE())
-    GROUP BY p.query_id
+    FROM sys.query_store_query q
+    JOIN sys.query_store_plan p              ON q.query_id  = p.query_id
+    JOIN sys.query_store_runtime_stats rs    ON p.plan_id   = rs.plan_id
+    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id = ri.runtime_stats_interval_id
+    WHERE ri.start_time >= DATEADD(day,-30,GETDATE())
+      AND ri.start_time <  DATEADD(minute,-$recentMinutes,GETDATE())
+    GROUP BY q.query_id
   )
-  SELECT TOP 20
-    q.query_id                                                                   AS [Query ID],
-    CAST(r.avg_duration/1000.0 AS DECIMAL(18,1))                                AS [Recent ms],
-    CAST(b.avg_duration/1000.0 AS DECIMAL(18,1))                                AS [Baseline ms],
+  SELECT TOP 25
+    r.query_id                                                                        AS [Query ID],
+    CAST(r.avg_duration/1000.0 AS DECIMAL(18,1))                                     AS [Recent ms],
+    CAST(b.avg_duration/1000.0 AS DECIMAL(18,1))                                     AS [Baseline ms],
     CAST((r.avg_duration-b.avg_duration)*100.0/NULLIF(b.avg_duration,0) AS DECIMAL(10,1)) AS [Regressed %],
-    CAST(r.avg_cpu/1000.0 AS DECIMAL(18,1))                                     AS [CPU ms],
-    r.exec_count                                                                  AS [Execs (24h)],
-    CAST(r.avg_reads AS BIGINT)                                                  AS [Avg Reads],
-    o.object_name                                                                AS [Object],
-    LEFT(qt.query_sql_text,400)                                                  AS [SQL Text]
+    CAST(r.avg_cpu/1000.0     AS DECIMAL(18,1))                                      AS [Avg CPU ms],
+    CAST(r.avg_reads          AS BIGINT)                                              AS [Avg Reads],
+    r.exec_count                                                                      AS [Execs],
+    ISNULL(OBJECT_NAME(q.object_id),'')                                               AS [Object],
+    LEFT(qt.query_sql_text,500)                                                       AS [SQL Text]
   FROM recent r
-  JOIN baseline b ON r.query_id=b.query_id
-  JOIN sys.query_store_query q ON r.query_id=q.query_id
-  JOIN sys.query_store_query_text qt ON q.query_text_id=qt.query_text_id
-  LEFT JOIN (SELECT DISTINCT query_id, OBJECT_NAME(object_id) AS object_name FROM sys.query_store_query WHERE object_id IS NOT NULL) o ON q.query_id=o.query_id
-  WHERE r.avg_duration > b.avg_duration * 1.1
+  JOIN baseline b                   ON r.query_id = b.query_id
+  JOIN sys.query_store_query q      ON r.query_id = q.query_id
+  JOIN sys.query_store_query_text qt ON q.query_text_id = qt.query_text_id
+  WHERE r.avg_duration > b.avg_duration * 1.2
     AND r.exec_count >= 1
   ORDER BY [Regressed %] DESC
 END
-ELSE SELECT 'Query Store not active on: $db — enable with: ALTER DATABASE [$db] SET QUERY_STORE = ON' AS [Status]
+ELSE SELECT 'Query Store not active on [$db] — run: ALTER DATABASE [$db] SET QUERY_STORE = ON (OPERATION_MODE = READ_WRITE)' AS [Status]
 "@
 }
 
@@ -2045,27 +2047,47 @@ $t12=New-Object System.Windows.Forms.TabPage
 $t12.Text="  Query Store"; $t12.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $tabs.TabPages.Add($t12)
 
-Add-RefreshBar $t12 { Refresh-TabQueryStore }
-
+# Single toolbar: Refresh button + window dropdown + label — all in one Dock=Top panel
 $pnlQSBar = New-Object System.Windows.Forms.Panel
-$pnlQSBar.Dock = 'Top'; $pnlQSBar.Height = 28; $pnlQSBar.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$pnlQSBar.Dock = [System.Windows.Forms.DockStyle]::Top
+$pnlQSBar.Height = 30
+$pnlQSBar.BackColor = [System.Drawing.Color]::FromArgb(32,32,40)
+$btnQSRefresh = New-Object System.Windows.Forms.Button
+$btnQSRefresh.Text = [char]0x21BB + " Refresh"
+$btnQSRefresh.Size = New-Object System.Drawing.Size(90,22)
+$btnQSRefresh.Location = New-Object System.Drawing.Point(4,4)
+$btnQSRefresh.FlatStyle = "Flat"
+$btnQSRefresh.BackColor = [System.Drawing.Color]::FromArgb(0,98,188)
+$btnQSRefresh.ForeColor = [System.Drawing.Color]::White
+$btnQSRefresh.Font = New-Object System.Drawing.Font("Segoe UI",9,[System.Drawing.FontStyle]::Bold)
+$btnQSRefresh.Cursor = [System.Windows.Forms.Cursors]::Hand
+$btnQSRefresh.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0,140,230)
+$btnQSRefresh.add_Click({ Refresh-TabQueryStore })
 $lblQSWin = New-Object System.Windows.Forms.Label
-$lblQSWin.Text = "Recent window:"; $lblQSWin.ForeColor = [System.Drawing.Color]::Silver
-$lblQSWin.Location = [System.Drawing.Point]::new(8,6); $lblQSWin.Size = [System.Drawing.Size]::new(110,18); $lblQSWin.Font = $monoFont
+$lblQSWin.Text = "Window:"; $lblQSWin.ForeColor = [System.Drawing.Color]::Silver
+$lblQSWin.Location = [System.Drawing.Point]::new(102,8); $lblQSWin.Size = [System.Drawing.Size]::new(58,18)
+$lblQSWin.Font = New-Object System.Drawing.Font("Segoe UI",9)
 $script:cmbQSWindow = New-Object System.Windows.Forms.ComboBox
 $script:cmbQSWindow.DropDownStyle = 'DropDownList'
-$script:cmbQSWindow.Font = $monoFont; $script:cmbQSWindow.ForeColor = [System.Drawing.Color]::White; $script:cmbQSWindow.BackColor = [System.Drawing.Color]::FromArgb(45,45,48)
-$script:cmbQSWindow.Location = [System.Drawing.Point]::new(122,4); $script:cmbQSWindow.Size = [System.Drawing.Size]::new(110,22)
+$script:cmbQSWindow.Font = New-Object System.Drawing.Font("Segoe UI",9)
+$script:cmbQSWindow.ForeColor = [System.Drawing.Color]::White
+$script:cmbQSWindow.BackColor = [System.Drawing.Color]::FromArgb(45,45,48)
+$script:cmbQSWindow.Location = [System.Drawing.Point]::new(163,4); $script:cmbQSWindow.Size = [System.Drawing.Size]::new(110,22)
 [void]$script:cmbQSWindow.Items.AddRange(@("Last 30 min","Last 1 hour","Last 2 hours","Last 6 hours"))
 $script:cmbQSWindow.SelectedIndex = 0
-$pnlQSBar.Controls.AddRange(@($lblQSWin,$script:cmbQSWindow))
-$t12.Controls.Add($pnlQSBar)
+$pnlQSBar.Controls.AddRange(@($btnQSRefresh,$lblQSWin,$script:cmbQSWindow))
 
-$hdr12b=New-SectionPanel "Regressed Queries — queries that got slower (recent vs last 7 days, >=50% slower)   DB: master"
-$script:qsTopHdr=$hdr12b.Controls[0]
-$script:gQSReg=New-DGV
-$t12.Controls.Add($script:gQSReg)
-$t12.Controls.Add($hdr12b)
+$hdr12b = New-SectionPanel "Regressed Queries — DB: master"
+$script:qsTopHdr = $hdr12b.Controls[0]
+$script:gQSReg = New-DGV
+# Correct stacking order: Fill first, then Top panels on top
+$t12.Controls.Add($script:gQSReg)   # Dock=Fill — occupies remaining space
+$t12.Controls.Add($hdr12b)           # Dock=Top — sits above grid
+$t12.Controls.Add($pnlQSBar)         # Dock=Top — sits above header
+
+# Allow cell selection so Query ID (and any cell) can be copied with Ctrl+C
+$script:gQSReg.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::CellSelect
+$script:gQSReg.ClipboardCopyMode = [System.Windows.Forms.DataGridViewClipboardCopyMode]::EnableWithoutHeaderText
 
 $script:gQSReg.add_CellFormatting({
     param($s,$e)
