@@ -1053,26 +1053,51 @@ ELSE SELECT 'Query Store not enabled on: $db — enable via: ALTER DATABASE [$db
 function Get-QSRegressedQuery([string]$db){
 @"
 USE [$db];
-IF EXISTS(SELECT 1 FROM sys.databases WHERE name='$db' AND is_query_store_on=1)
-  SELECT TOP 15
-    q.query_id AS [Query ID],
-    CAST(r.avg_duration/1000.0 AS DECIMAL(18,2)) AS [Recent Avg ms],
-    CAST(h.avg_duration/1000.0 AS DECIMAL(18,2)) AS [Historic Avg ms],
-    CAST((r.avg_duration-h.avg_duration)*100.0/NULLIF(h.avg_duration,0) AS DECIMAL(10,1)) AS [Regressed %],
-    r.count_executions AS [Recent Execs],
-    LEFT(qt.query_sql_text,300) AS [SQL Text]
-  FROM sys.query_store_query q
+IF EXISTS(SELECT 1 FROM sys.database_query_store_options WHERE actual_state IN (1,2))
+BEGIN
+  WITH recent AS (
+    SELECT p.query_id,
+      AVG(rs.avg_duration)      AS avg_duration,
+      AVG(rs.avg_cpu_time)      AS avg_cpu,
+      SUM(rs.count_executions)  AS exec_count,
+      AVG(rs.avg_logical_io_reads) AS avg_reads
+    FROM sys.query_store_runtime_stats rs
+    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id=ri.runtime_stats_interval_id
+    JOIN sys.query_store_plan p ON rs.plan_id=p.plan_id
+    WHERE ri.start_time >= DATEADD(hour,-24,GETDATE())
+    GROUP BY p.query_id
+  ),
+  baseline AS (
+    SELECT p.query_id,
+      AVG(rs.avg_duration)      AS avg_duration,
+      AVG(rs.avg_cpu_time)      AS avg_cpu,
+      AVG(rs.avg_logical_io_reads) AS avg_reads
+    FROM sys.query_store_runtime_stats rs
+    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id=ri.runtime_stats_interval_id
+    JOIN sys.query_store_plan p ON rs.plan_id=p.plan_id
+    WHERE ri.start_time BETWEEN DATEADD(day,-30,GETDATE()) AND DATEADD(hour,-24,GETDATE())
+    GROUP BY p.query_id
+  )
+  SELECT TOP 20
+    q.query_id                                                                   AS [Query ID],
+    CAST(r.avg_duration/1000.0 AS DECIMAL(18,1))                                AS [Recent ms],
+    CAST(b.avg_duration/1000.0 AS DECIMAL(18,1))                                AS [Baseline ms],
+    CAST((r.avg_duration-b.avg_duration)*100.0/NULLIF(b.avg_duration,0) AS DECIMAL(10,1)) AS [Regressed %],
+    CAST(r.avg_cpu/1000.0 AS DECIMAL(18,1))                                     AS [CPU ms],
+    r.exec_count                                                                  AS [Execs (24h)],
+    CAST(r.avg_reads AS BIGINT)                                                  AS [Avg Reads],
+    o.object_name                                                                AS [Object],
+    LEFT(qt.query_sql_text,400)                                                  AS [SQL Text]
+  FROM recent r
+  JOIN baseline b ON r.query_id=b.query_id
+  JOIN sys.query_store_query q ON r.query_id=q.query_id
   JOIN sys.query_store_query_text qt ON q.query_text_id=qt.query_text_id
-  JOIN sys.query_store_plan p ON q.query_id=p.query_id
-  JOIN sys.query_store_runtime_stats r ON p.plan_id=r.plan_id
-  JOIN sys.query_store_runtime_stats_interval ri ON r.runtime_stats_interval_id=ri.runtime_stats_interval_id
-  JOIN sys.query_store_runtime_stats h ON p.plan_id=h.plan_id
-  JOIN sys.query_store_runtime_stats_interval hi ON h.runtime_stats_interval_id=hi.runtime_stats_interval_id
-  WHERE ri.start_time>=DATEADD(hour,-24,GETDATE())
-    AND hi.start_time BETWEEN DATEADD(day,-7,GETDATE()) AND DATEADD(hour,-24,GETDATE())
-    AND r.avg_duration>h.avg_duration*1.5 AND r.count_executions>=5
+  LEFT JOIN (SELECT DISTINCT query_id, OBJECT_NAME(object_id) AS object_name FROM sys.query_store_query WHERE object_id IS NOT NULL) o ON q.query_id=o.query_id
+  WHERE r.avg_duration > b.avg_duration * 1.1
+    AND r.exec_count >= 1
   ORDER BY [Regressed %] DESC
-ELSE SELECT 'Query Store not enabled on: $db' AS [Status]
+END
+ELSE SELECT 'Query Store not active on: $db — enable with: ALTER DATABASE [$db] SET QUERY_STORE = ON' AS [Status]
 "@
 }
 
