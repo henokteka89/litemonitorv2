@@ -2013,7 +2013,7 @@ $cmbTrendPeriod=New-Object System.Windows.Forms.ComboBox; $cmbTrendPeriod.Locati
 $cmbTrendPeriod.Size=New-Object System.Drawing.Size(110,22); $cmbTrendPeriod.DropDownStyle="DropDownList"
 $cmbTrendPeriod.BackColor=[System.Drawing.Color]::FromArgb(45,45,55); $cmbTrendPeriod.ForeColor=[System.Drawing.Color]::White
 $cmbTrendPeriod.Font=New-Object System.Drawing.Font("Segoe UI",9)
-$cmbTrendPeriod.Items.AddRange(@("Last 4h","Last 24h","Last 7d","Last 30d")); $cmbTrendPeriod.SelectedIndex=1
+$cmbTrendPeriod.Items.AddRange(@("Last 4h","Last 24h","Last 7d","Last 30d")); $cmbTrendPeriod.SelectedIndex=0
 $btnRefTrend=New-Object System.Windows.Forms.Button; $btnRefTrend.Text="Refresh Trends"
 $btnRefTrend.Location=New-Object System.Drawing.Point(216,4); $btnRefTrend.Size=New-Object System.Drawing.Size(110,24)
 $btnRefTrend.FlatStyle="Flat"; $btnRefTrend.BackColor=[System.Drawing.Color]::FromArgb(0,98,188)
@@ -2043,6 +2043,7 @@ function New-TrendChartTab($title) {
     $ca.AxisX.MajorGrid.LineColor  = [System.Drawing.Color]::FromArgb(40,40,50)
     $ca.AxisY.MajorGrid.LineColor  = [System.Drawing.Color]::FromArgb(40,40,50)
     $ca.AxisX.MajorTickMark.LineColor = [System.Drawing.Color]::FromArgb(60,60,70)
+    $ca.AxisX.IsMarginVisible = $false
     $ca.AxisY.MajorTickMark.LineColor = [System.Drawing.Color]::FromArgb(60,60,70)
     [void]$ch.ChartAreas.Add($ca)
     $lg = New-Object System.Windows.Forms.DataVisualization.Charting.Legend
@@ -2076,9 +2077,8 @@ function Add-LineSeries($chart,$name,$color,$dt,$xCol,$yCol) {
     $s.Name        = $name
     $s.Color       = $color
     $s.ChartType   = [System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
-    $s.BorderWidth = 2
-    $s.MarkerStyle = [System.Windows.Forms.DataVisualization.Charting.MarkerStyle]::Circle
-    $s.MarkerSize  = 8
+    $s.BorderWidth = 1
+    $s.MarkerStyle = [System.Windows.Forms.DataVisualization.Charting.MarkerStyle]::None
     foreach($row in $dt.Rows){
         try{ [void]$s.Points.AddXY([datetime]$row[$xCol],[double]"$($row[$yCol])") }catch{}
     }
