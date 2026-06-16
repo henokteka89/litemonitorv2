@@ -2345,7 +2345,7 @@ function Refresh-TabIndexesMem {
         foreach($r in $dtMem.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_Memory(ServerName,Metric,Value,Status) VALUES('$srv','$(EscSql $r['Metric'])','$(EscSql $r['Value'])','$(EscSql $r['Status'])')" }
     }
     $topN = switch($script:cmbMemTop.SelectedIndex){ 0{5} 1{10} 2{20} 3{50} default{5} }
-    $qBuf = "SET NOCOUNT ON; SET ARITHABORT ON; SELECT TOP $topN CASE WHEN database_id=32767 THEN 'Resource DB' ELSE DB_NAME(database_id) END AS [Database], COUNT(*)*8/1024 AS [Buffer MB], CAST(COUNT(*)*100.0/SUM(COUNT(*)) OVER() AS DECIMAL(5,1)) AS [% of Buffer Pool], SUM(CASE WHEN is_modified=1 THEN 1 ELSE 0 END)*8/1024 AS [Dirty Pages MB] FROM sys.dm_os_buffer_descriptors WITH (NOLOCK) GROUP BY database_id ORDER BY COUNT(*) DESC"
+    $qBuf = "SET NOCOUNT ON; SET ARITHABORT ON; SELECT TOP $topN CASE WHEN database_id=32767 THEN 'Resource DB' ELSE DB_NAME(database_id) END AS [Database], COUNT(*)*8/1024 AS [Buffer MB], CAST(COUNT(*)*100.0/SUM(COUNT(*)) OVER() AS DECIMAL(5,1)) AS [% of Buffer Pool], SUM(CASE WHEN is_modified=1 THEN 1 ELSE 0 END)*8/1024 AS [Dirty Pages MB] FROM sys.dm_os_buffer_descriptors WITH (NOLOCK) GROUP BY database_id ORDER BY COUNT(*) DESC OPTION (HASH GROUP, RECOMPILE)"
     $qClk = "SELECT TOP $topN type AS [Clerk Type], name AS [Name], CAST(pages_kb/1024.0 AS DECIMAL(10,1)) AS [Memory MB], CAST(pages_kb*100.0/NULLIF(SUM(pages_kb) OVER(),0) AS DECIMAL(5,1)) AS [% of Total] FROM sys.dm_os_memory_clerks WHERE pages_kb>0 ORDER BY pages_kb DESC"
     Bind-Grid $script:gBufDB  (Invoke-SqlQuery -sql $qBuf -timeout 120)
     Bind-Grid $script:gClerks (Invoke-SqlQuery $qClk)
