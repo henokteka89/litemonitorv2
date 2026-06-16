@@ -1275,10 +1275,11 @@ $t1.Text = "  Configuration"
 $t1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $tabs.TabPages.Add($t1)
 
-# Use a SplitContainer so both grids get space
+# Outer: top=config checks, bottom=db sizes+index frag side-by-side
 $split1 = New-Object System.Windows.Forms.SplitContainer
 $split1.Dock        = [System.Windows.Forms.DockStyle]::Fill
 $split1.Orientation = [System.Windows.Forms.Orientation]::Horizontal
+$split1.SplitterDistance = 300
 $split1.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split1.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
@@ -1288,13 +1289,28 @@ Add-RefreshBar $t1 { Refresh-TabConfig }
 $hdr1a = New-SectionPanel "Server Configuration & Best Practice Checks   GREEN=OK  ORANGE=Warning  BLUE=Info"
 $script:gCfg = New-DGV
 $split1.Panel1.Controls.Add($script:gCfg)
-$split1.Panel1.Controls.Add($hdr1a)   # Top dock, added after Fill so it renders on top
+$split1.Panel1.Controls.Add($hdr1a)
+
+# Bottom: DB Sizes (left) | Index Frag (right)
+$split1bot = New-Object System.Windows.Forms.SplitContainer
+$split1bot.Dock = [System.Windows.Forms.DockStyle]::Fill
+$split1bot.Orientation = [System.Windows.Forms.Orientation]::Vertical
+$split1bot.SplitterDistance = 440
+$split1bot.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split1bot.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split1bot.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split1.Panel2.Controls.Add($split1bot)
+
+$hdr1c = New-SectionPanel "Database Sizes — Data MB, Log MB, Total GB"
+$script:gDBSizes = New-DGV
+$split1bot.Panel1.Controls.Add($script:gDBSizes)
+$split1bot.Panel1.Controls.Add($hdr1c)
 
 $hdr1b = New-SectionPanel "Index Fragmentation Health — DB: master"
-$script:idxHdrLbl = $hdr1b.Controls[0]  # store label ref for dynamic update
+$script:idxHdrLbl = $hdr1b.Controls[0]
 $script:gIdx = New-DGV
-$split1.Panel2.Controls.Add($script:gIdx)
-$split1.Panel2.Controls.Add($hdr1b)
+$split1bot.Panel2.Controls.Add($script:gIdx)
+$split1bot.Panel2.Controls.Add($hdr1b)
 
 $script:gCfg.add_CellFormatting({
     param($s,$e)
@@ -1552,24 +1568,42 @@ $t3.Text = "  Backups & Jobs"
 $t3.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $tabs.TabPages.Add($t3)
 
+# Outer: top (backup status + jobs) | bottom (deadlocks + backup history)
+$split3outer = New-Object System.Windows.Forms.SplitContainer
+$split3outer.Dock = [System.Windows.Forms.DockStyle]::Fill
+$split3outer.Orientation = [System.Windows.Forms.Orientation]::Horizontal
+$split3outer.SplitterDistance = 340
+$split3outer.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split3outer.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split3outer.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$t3.Controls.Add($split3outer)
+Add-RefreshBar $t3 { Refresh-TabBackups }
+
+# Top: backup status (left) | agent jobs (right)
 $split3 = New-Object System.Windows.Forms.SplitContainer
 $split3.Dock        = [System.Windows.Forms.DockStyle]::Fill
-$split3.Orientation = [System.Windows.Forms.Orientation]::Horizontal
+$split3.Orientation = [System.Windows.Forms.Orientation]::Vertical
+$split3.SplitterDistance = 560
 $split3.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split3.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split3.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$t3.Controls.Add($split3)
-Add-RefreshBar $t3 { Refresh-TabBackups }
+$split3outer.Panel1.Controls.Add($split3)
 
 $hdr3a = New-SectionPanel "Database Backup Status   RED=Never backed up  ORANGE=Overdue  GREEN=OK"
 $script:gBak = New-DGV
 $split3.Panel1.Controls.Add($script:gBak)
 $split3.Panel1.Controls.Add($hdr3a)
 
-$hdr3b = New-SectionPanel "SQL Agent Job History (last 50 runs)"
+$hdr3b = New-SectionPanel "SQL Agent Job History (failed/retry/cancelled only)"
 $script:gJob = New-DGV
 $split3.Panel2.Controls.Add($script:gJob)
 $split3.Panel2.Controls.Add($hdr3b)
+
+# Bottom: deadlocks (full width)
+$hdr3c = New-SectionPanel "Recent Deadlocks (from system_health XE session)"
+$script:gDeadlock = New-DGV
+$split3outer.Panel2.Controls.Add($script:gDeadlock)
+$split3outer.Panel2.Controls.Add($hdr3c)
 
 $script:gBak.add_CellFormatting({
     param($s,$e)
@@ -1644,48 +1678,26 @@ $t5.Text = "  Storage & TempDB"
 $t5.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $tabs.TabPages.Add($t5)
 
-# Outer vertical split: top=drive space+db files, bottom=tempdb
+# Outer: top=TempDB checks+files stacked, bottom=drive+DB files side-by-side
 $split5a = New-Object System.Windows.Forms.SplitContainer
 $split5a.Dock = [System.Windows.Forms.DockStyle]::Fill
 $split5a.Orientation = [System.Windows.Forms.Orientation]::Horizontal
-$split5a.SplitterDistance = 320
+$split5a.SplitterDistance = 380
 $split5a.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split5a.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split5a.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $t5.Controls.Add($split5a)
 Add-RefreshBar $t5 { Refresh-TabSessions }
 
-# Top panel: drive space (left) | db files (right)
-$split5b = New-Object System.Windows.Forms.SplitContainer
-$split5b.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split5b.Orientation = [System.Windows.Forms.Orientation]::Vertical
-$split5b.SplitterDistance = 300
-$split5b.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split5b.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split5b.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split5a.Panel1.Controls.Add($split5b)
-
-# Drive space grid (built from xp_fixeddrives + WMI in refresh)
-$hdr5drive = New-SectionPanel "Drive Free Space   RED<10%  ORANGE<20%  GREEN=OK"
-$script:gDrive = New-DGV
-$split5b.Panel1.Controls.Add($script:gDrive)
-$split5b.Panel1.Controls.Add($hdr5drive)
-
-# DB files grid
-$hdr5files = New-SectionPanel "Database Files — Allocated Size, I/O Activity & AutoGrowth Settings   ORANGE=Warning"
-$script:gDBFiles = New-DGV
-$split5b.Panel2.Controls.Add($script:gDBFiles)
-$split5b.Panel2.Controls.Add($hdr5files)
-
-# Bottom panel: tempdb checks (left) | tempdb files (right)
+# Top: TempDB checks (top) | TempDB files (bottom) — stacked
 $split5c = New-Object System.Windows.Forms.SplitContainer
 $split5c.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split5c.Orientation = [System.Windows.Forms.Orientation]::Vertical
-$split5c.SplitterDistance = 480
+$split5c.Orientation = [System.Windows.Forms.Orientation]::Horizontal
+$split5c.SplitterDistance = 180
 $split5c.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split5c.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split5c.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split5a.Panel2.Controls.Add($split5c)
+$split5a.Panel1.Controls.Add($split5c)
 
 $hdr5tmp = New-SectionPanel "TempDB Configuration & Pressure Checks   GREEN=OK  ORANGE=Warning"
 $script:gTmpChk = New-DGV
@@ -1696,6 +1708,26 @@ $hdr5tmpf = New-SectionPanel "TempDB Files — Per-File Space Usage"
 $script:gTmpFiles = New-DGV
 $split5c.Panel2.Controls.Add($script:gTmpFiles)
 $split5c.Panel2.Controls.Add($hdr5tmpf)
+
+# Bottom: Drive free space (left) | Database files (right)
+$split5b = New-Object System.Windows.Forms.SplitContainer
+$split5b.Dock = [System.Windows.Forms.DockStyle]::Fill
+$split5b.Orientation = [System.Windows.Forms.Orientation]::Vertical
+$split5b.SplitterDistance = 300
+$split5b.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split5b.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split5b.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split5a.Panel2.Controls.Add($split5b)
+
+$hdr5drive = New-SectionPanel "Drive Free Space   RED<10%  ORANGE<20%  GREEN=OK"
+$script:gDrive = New-DGV
+$split5b.Panel1.Controls.Add($script:gDrive)
+$split5b.Panel1.Controls.Add($hdr5drive)
+
+$hdr5files = New-SectionPanel "Database Files — Allocated Size, I/O Activity & AutoGrowth Settings   ORANGE=Warning"
+$script:gDBFiles = New-DGV
+$split5b.Panel2.Controls.Add($script:gDBFiles)
+$split5b.Panel2.Controls.Add($hdr5files)
 
 # Color formatting - drive space
 $script:gDrive.add_CellFormatting({
@@ -1765,98 +1797,60 @@ $t6.Text = "  Indexes & Memory"
 $t6.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $tabs.TabPages.Add($t6)
 
-$split6outer = New-Object System.Windows.Forms.SplitContainer
-$split6outer.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split6outer.Orientation = [System.Windows.Forms.Orientation]::Horizontal
-$split6outer.SplitterDistance = 430
-$split6outer.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6outer.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6outer.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$t6.Controls.Add($split6outer)
-Add-RefreshBar $t6 { Refresh-TabIndexesMem }
+# Top N filter bar for clerks + buffer pool
+$memFilterPnl = New-Object System.Windows.Forms.Panel
+$memFilterPnl.Dock = [System.Windows.Forms.DockStyle]::Top; $memFilterPnl.Height = 28
+$memFilterPnl.BackColor = [System.Drawing.Color]::FromArgb(32,32,40)
+$memTopLbl = New-Object System.Windows.Forms.Label
+$memTopLbl.Text = "  Show top:"; $memTopLbl.Location = New-Object System.Drawing.Point(4,6)
+$memTopLbl.Size = New-Object System.Drawing.Size(70,18); $memTopLbl.ForeColor = [System.Drawing.Color]::FromArgb(180,180,180)
+$memTopLbl.Font = New-Object System.Drawing.Font("Segoe UI",9); $memTopLbl.BackColor = [System.Drawing.Color]::Transparent
+$script:cmbMemTop = New-Object System.Windows.Forms.ComboBox
+$script:cmbMemTop.Location = New-Object System.Drawing.Point(78,4); $script:cmbMemTop.Size = New-Object System.Drawing.Size(70,22)
+$script:cmbMemTop.DropDownStyle = "DropDownList"; $script:cmbMemTop.BackColor = [System.Drawing.Color]::FromArgb(45,45,55)
+$script:cmbMemTop.ForeColor = [System.Drawing.Color]::White; $script:cmbMemTop.Font = New-Object System.Drawing.Font("Segoe UI",9)
+$script:cmbMemTop.Items.AddRange(@("Top 5","Top 10","Top 20","Top 50")); $script:cmbMemTop.SelectedIndex = 0
+$memFilterPnl.Controls.AddRange(@($memTopLbl,$script:cmbMemTop))
+$t6.Controls.Add($memFilterPnl)
 
-# Top: missing indexes (left) | unused indexes (right)
+# Layout: top=memory pressure+clerks side-by-side, bottom=buffer pool
 $split6top = New-Object System.Windows.Forms.SplitContainer
 $split6top.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split6top.Orientation = [System.Windows.Forms.Orientation]::Vertical
-$split6top.SplitterDistance = 640
+$split6top.Orientation = [System.Windows.Forms.Orientation]::Horizontal
+$split6top.SplitterDistance = 280
 $split6top.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split6top.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split6top.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6outer.Panel1.Controls.Add($split6top)
+$t6.Controls.Add($split6top)
+Add-RefreshBar $t6 { Refresh-TabIndexesMem }
 
-$hdr6a = New-SectionPanel "Missing Indexes (server-wide, ranked by impact score — since last restart)"
-$script:gMissIdx = New-DGV
-$split6top.Panel1.Controls.Add($script:gMissIdx)
-$split6top.Panel1.Controls.Add($hdr6a)
-
-$hdr6b = New-SectionPanel "Unused / Redundant Indexes — DB: master (change DB dropdown)"
-$script:idxUnusedHdr = $hdr6b.Controls[0]
-$script:gUnusedIdx = New-DGV
-$split6top.Panel2.Controls.Add($script:gUnusedIdx)
-$split6top.Panel2.Controls.Add($hdr6b)
-
-# Bottom: memory pressure (left) | buffer pool by DB (right) | clerks (far right)
-$split6bot = New-Object System.Windows.Forms.SplitContainer
-$split6bot.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split6bot.Orientation = [System.Windows.Forms.Orientation]::Vertical
-$split6bot.SplitterDistance = 400
-$split6bot.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6bot.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6bot.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6outer.Panel2.Controls.Add($split6bot)
+# Top: memory pressure (left) | top clerks (right)
+$split6topH = New-Object System.Windows.Forms.SplitContainer
+$split6topH.Dock = [System.Windows.Forms.DockStyle]::Fill
+$split6topH.Orientation = [System.Windows.Forms.Orientation]::Vertical
+$split6topH.SplitterDistance = 500
+$split6topH.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split6topH.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split6topH.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
+$split6top.Panel1.Controls.Add($split6topH)
 
 $hdr6c = New-SectionPanel "Memory Pressure Checks   GREEN=OK  ORANGE=Warning"
 $script:gMemChk = New-DGV
-$split6bot.Panel1.Controls.Add($script:gMemChk)
-$split6bot.Panel1.Controls.Add($hdr6c)
+$split6topH.Panel1.Controls.Add($script:gMemChk)
+$split6topH.Panel1.Controls.Add($hdr6c)
 
-$split6bot2 = New-Object System.Windows.Forms.SplitContainer
-$split6bot2.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split6bot2.Orientation = [System.Windows.Forms.Orientation]::Vertical
-$split6bot2.SplitterDistance = 360
-$split6bot2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6bot2.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6bot2.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split6bot.Panel2.Controls.Add($split6bot2)
-
-$hdr6d = New-SectionPanel "Buffer Pool by Database"
-$script:gBufDB = New-DGV
-$split6bot2.Panel1.Controls.Add($script:gBufDB)
-$split6bot2.Panel1.Controls.Add($hdr6d)
-
-$hdr6e = New-SectionPanel "Top Memory Clerks"
+$hdr6e = New-SectionPanel "Top Memory Clerks (default Top 5)"
 $script:gClerks = New-DGV
-$split6bot2.Panel2.Controls.Add($script:gClerks)
-$split6bot2.Panel2.Controls.Add($hdr6e)
+$split6topH.Panel2.Controls.Add($script:gClerks)
+$split6topH.Panel2.Controls.Add($hdr6e)
 
-# Color formatting - missing indexes impact score
-$script:gMissIdx.add_CellFormatting({
-    param($s,$e)
-    if($e.ColumnIndex -lt 0 -or $script:gMissIdx.Columns.Count -eq 0){return}
-    $cn = $script:gMissIdx.Columns[$e.ColumnIndex].Name
-    if($cn -eq "Avg Benefit %"){
-        $v=0.0
-        if([double]::TryParse("$($e.Value)",[ref]$v)){
-            if($v -ge 80){$e.CellStyle.ForeColor=[System.Drawing.Color]::Red; $e.CellStyle.Font=New-Object System.Drawing.Font("Segoe UI",9,[System.Drawing.FontStyle]::Bold)}
-            elseif($v -ge 50){$e.CellStyle.ForeColor=[System.Drawing.Color]::Orange}
-            else{$e.CellStyle.ForeColor=[System.Drawing.Color]::Yellow}
-        }
-    }
-})
+# Bottom: buffer pool by database (top 5 default)
+$hdr6d = New-SectionPanel "Buffer Pool by Database (default Top 5)"
+$script:gBufDB = New-DGV
+$split6top.Panel2.Controls.Add($script:gBufDB)
+$split6top.Panel2.Controls.Add($hdr6d)
 
-# Color formatting - unused indexes
-$script:gUnusedIdx.add_CellFormatting({
-    param($s,$e)
-    if($e.ColumnIndex -lt 0 -or $script:gUnusedIdx.Columns.Count -eq 0){return}
-    if($script:gUnusedIdx.Columns[$e.ColumnIndex].Name -eq "Recommendation"){
-        switch -Wildcard ($e.Value){
-            "*DROP*"   {$e.CellStyle.ForeColor=[System.Drawing.Color]::OrangeRed; $e.CellStyle.Font=New-Object System.Drawing.Font("Segoe UI",9,[System.Drawing.FontStyle]::Bold)}
-            "*Review*" {$e.CellStyle.ForeColor=[System.Drawing.Color]::Yellow}
-            "*in use*" {$e.CellStyle.ForeColor=[System.Drawing.Color]::LightGreen}
-        }
-    }
-})
+$script:cmbMemTop.add_SelectedIndexChanged({ if($script:connected){ Refresh-TabIndexesMem } })
 
 # Color formatting - memory checks
 $script:gMemChk.add_CellFormatting({
@@ -1871,100 +1865,7 @@ $script:gMemChk.add_CellFormatting({
     }
 })
 
-# ── TAB 7: TRANSACTIONS, DEADLOCKS & SECURITY ────────────────────────────────
-$t7 = New-Object System.Windows.Forms.TabPage
-$t7.Text = "  Security & Locks"
-$t7.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$tabs.TabPages.Add($t7)
-
-$split7outer = New-Object System.Windows.Forms.SplitContainer
-$split7outer.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split7outer.Orientation = [System.Windows.Forms.Orientation]::Horizontal
-$split7outer.SplitterDistance = 350
-$split7outer.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7outer.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7outer.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$t7.Controls.Add($split7outer)
-Add-RefreshBar $t7 { Refresh-TabSecurity }
-
-# Top: long transactions (left) | deadlocks (right)
-$split7top = New-Object System.Windows.Forms.SplitContainer
-$split7top.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split7top.Orientation = [System.Windows.Forms.Orientation]::Vertical
-$split7top.SplitterDistance = 560
-$split7top.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7top.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7top.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7outer.Panel1.Controls.Add($split7top)
-
-$hdr7a = New-SectionPanel "Long-running Transactions (open > 30 sec)   RED rows = also blocking"
-$script:gLongTxn = New-DGV
-$split7top.Panel1.Controls.Add($script:gLongTxn)
-$split7top.Panel1.Controls.Add($hdr7a)
-
-$hdr7b = New-SectionPanel "Recent Deadlocks (from system_health XE session)"
-$script:gDeadlock = New-DGV
-$split7top.Panel2.Controls.Add($script:gDeadlock)
-$split7top.Panel2.Controls.Add($hdr7b)
-
-# Bottom: security checks (left) | sysadmin members (right)
-$split7bot = New-Object System.Windows.Forms.SplitContainer
-$split7bot.Dock = [System.Windows.Forms.DockStyle]::Fill
-$split7bot.Orientation = [System.Windows.Forms.Orientation]::Vertical
-$split7bot.SplitterDistance = 560
-$split7bot.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7bot.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7bot.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
-$split7outer.Panel2.Controls.Add($split7bot)
-
-$hdr7c = New-SectionPanel "Security Audit Checks   GREEN=OK  ORANGE=Warning"
-$script:gSecChk = New-DGV
-$split7bot.Panel1.Controls.Add($script:gSecChk)
-$split7bot.Panel1.Controls.Add($hdr7c)
-
-$hdr7d = New-SectionPanel "Sysadmin Role Members"
-$script:gSysadmin = New-DGV
-$split7bot.Panel2.Controls.Add($script:gSysadmin)
-$split7bot.Panel2.Controls.Add($hdr7d)
-
-# Color formatting - long transactions
-$script:gLongTxn.add_CellFormatting({
-    param($s,$e)
-    if($e.RowIndex -lt 0 -or $script:gLongTxn.Columns.Count -eq 0){return}
-    try{
-        $blocked = $script:gLongTxn.Rows[$e.RowIndex].Cells["Blocked By"].Value
-        $openMin = 0.0
-        [double]::TryParse("$($script:gLongTxn.Rows[$e.RowIndex].Cells['Open Min'].Value)",[ref]$openMin) | Out-Null
-        if($null -ne $blocked -and "$blocked" -ne "0" -and "$blocked" -ne ""){
-            $e.CellStyle.BackColor=[System.Drawing.Color]::FromArgb(90,22,22)
-        } elseif($openMin -ge 5){
-            $e.CellStyle.ForeColor=[System.Drawing.Color]::Orange
-        }
-    }catch{}
-})
-
-# Color formatting - security checks
-$script:gSecChk.add_CellFormatting({
-    param($s,$e)
-    if($e.ColumnIndex -lt 0 -or $script:gSecChk.Columns.Count -eq 0){return}
-    if($script:gSecChk.Columns[$e.ColumnIndex].Name -eq "Status"){
-        switch($e.Value){
-            "WARNING"{$e.CellStyle.ForeColor=[System.Drawing.Color]::Orange; $e.CellStyle.Font=New-Object System.Drawing.Font("Segoe UI",9,[System.Drawing.FontStyle]::Bold)}
-            "OK"     {$e.CellStyle.ForeColor=[System.Drawing.Color]::LightGreen}
-            "INFO"   {$e.CellStyle.ForeColor=[System.Drawing.Color]::CornflowerBlue}
-        }
-    }
-})
-
-# Color formatting - sysadmin members
-$script:gSysadmin.add_CellFormatting({
-    param($s,$e)
-    if($e.ColumnIndex -lt 0 -or $script:gSysadmin.Columns.Count -eq 0){return}
-    if($script:gSysadmin.Columns[$e.ColumnIndex].Name -eq "Category"){
-        if($e.Value -eq "User-added"){$e.CellStyle.ForeColor=[System.Drawing.Color]::Orange}
-        else{$e.CellStyle.ForeColor=[System.Drawing.Color]::DimGray}
-    }
-})
+# gDeadlock grid (placed in Backups & Jobs tab below)
 
 # ── TAB 10: ERROR LOG ────────────────────────────────────────────────────────
 $t10 = New-Object System.Windows.Forms.TabPage
@@ -2009,18 +1910,12 @@ $split11a.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $t11.Controls.Add($split11a)
 Add-RefreshBar $t11 { Refresh-TabCapacity }
 
-$split11b=New-Object System.Windows.Forms.SplitContainer
-$split11b.Dock=[System.Windows.Forms.DockStyle]::Fill; $split11b.Orientation=[System.Windows.Forms.Orientation]::Vertical
-$split11b.SplitterDistance=500; $split11b.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
-$split11b.Panel1.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
-$split11b.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
-$split11a.Panel1.Controls.Add($split11b)
-
-$hdr11a=New-SectionPanel "Database Sizes — Data MB, Log MB, Total GB (sorted by size desc)"
-$script:gDBSizes=New-DGV; $split11b.Panel1.Controls.Add($script:gDBSizes); $split11b.Panel1.Controls.Add($hdr11a)
+# Top: Auto-Growth events
 $hdr11b=New-SectionPanel "Auto-Growth Events (from default trace) — indicates undersized files"
-$script:gAutoGrow=New-DGV; $split11b.Panel2.Controls.Add($script:gAutoGrow); $split11b.Panel2.Controls.Add($hdr11b)
+$script:gAutoGrow=New-DGV
+$split11a.Panel1.Controls.Add($script:gAutoGrow); $split11a.Panel1.Controls.Add($hdr11b)
 
+# Bottom: VLF (left) | Stats Health (right)
 $split11c=New-Object System.Windows.Forms.SplitContainer
 $split11c.Dock=[System.Windows.Forms.DockStyle]::Fill; $split11c.Orientation=[System.Windows.Forms.Orientation]::Vertical
 $split11c.SplitterDistance=420; $split11c.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
@@ -2075,19 +1970,13 @@ $t12=New-Object System.Windows.Forms.TabPage
 $t12.Text="  Query Store"; $t12.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $tabs.TabPages.Add($t12)
 
-$split12=New-Object System.Windows.Forms.SplitContainer
-$split12.Dock=[System.Windows.Forms.DockStyle]::Fill; $split12.Orientation=[System.Windows.Forms.Orientation]::Horizontal
-$split12.SplitterDistance=380; $split12.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
-$split12.Panel1.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
-$split12.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
-$t12.Controls.Add($split12)
 Add-RefreshBar $t12 { Refresh-TabQueryStore }
 
-$hdr12a=New-SectionPanel "Top 20 Queries by CPU (last 24h) — DB: master   requires SQL 2016+  Query Store must be ON"
-$script:qsTopHdr=$hdr12a.Controls[0]
-$script:gQSTop=New-DGV; $split12.Panel1.Controls.Add($script:gQSTop); $split12.Panel1.Controls.Add($hdr12a)
-$hdr12b=New-SectionPanel "Regressed Queries — queries that got slower (recent vs last 7 days, >=50% slower)"
-$script:gQSReg=New-DGV; $split12.Panel2.Controls.Add($script:gQSReg); $split12.Panel2.Controls.Add($hdr12b)
+$hdr12b=New-SectionPanel "Regressed Queries — queries that got slower (recent vs last 7 days, >=50% slower)   DB: master"
+$script:qsTopHdr=$hdr12b.Controls[0]
+$script:gQSReg=New-DGV
+$t12.Controls.Add($script:gQSReg)
+$t12.Controls.Add($hdr12b)
 
 $script:gQSReg.add_CellFormatting({
     param($s,$e)
@@ -2177,8 +2066,6 @@ function New-TrendGridTab($title) {
 $script:chTrendCPU    = New-TrendChartTab "CPU %"
 $script:chTrendWaits  = New-TrendChartTab "Wait Stats"
 $script:chTrendMem    = New-TrendChartTab "Memory (PLE)"
-$script:gTrendCfg     = New-TrendGridTab  "Config History"
-$script:gTrendBackup  = New-TrendGridTab  "Backup History"
 
 function Get-TrendHours {
     switch($cmbTrendPeriod.SelectedIndex){ 0{4} 1{24} 2{168} 3{720} default{24} }
@@ -2213,9 +2100,7 @@ function Refresh-Trends {
     $script:chTrendCPU.ChartAreas[0].AxisY.Minimum = 0
     $script:chTrendCPU.ChartAreas[0].AxisY.Maximum = 100
     $dtCPU = Read-FromLog "SELECT CapturedAt,SQLCPUPct,OtherCPUPct,IdlePct FROM dbo.SQLMon_CPU WHERE ServerName='$srv' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) ORDER BY CapturedAt"
-    Add-LineSeries $script:chTrendCPU "SQL CPU %"   $blue   $dtCPU "CapturedAt" "SQLCPUPct"
-    Add-LineSeries $script:chTrendCPU "Other CPU %"  $orange $dtCPU "CapturedAt" "OtherCPUPct"
-    Add-LineSeries $script:chTrendCPU "Idle %"       $green  $dtCPU "CapturedAt" "IdlePct"
+    Add-LineSeries $script:chTrendCPU "SQL CPU %" $blue $dtCPU "CapturedAt" "SQLCPUPct"
 
     # ── Top Wait Types bar chart (aggregated over period) ────────────────────
     $script:chTrendWaits.Series.Clear()
@@ -2249,10 +2134,6 @@ function Refresh-Trends {
     $script:chTrendMem.ChartAreas[0].AxisY.StripLines.Clear()
     [void]$script:chTrendMem.ChartAreas[0].AxisY.StripLines.Add($strip)
 
-    # ── Config & Backup as grids (discrete/daily data) ───────────────────────
-    Bind-Grid $script:gTrendCfg    (Read-FromLog "SELECT CaptureDate AS [Date],Setting,Value,Status FROM dbo.SQLMon_Config WHERE ServerName='$srv' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) ORDER BY CapturedAt DESC,Setting")
-    Bind-Grid $script:gTrendBackup (Read-FromLog "SELECT CaptureDate AS [Date],DatabaseName AS [Database],LastFullBackup AS [Last Full],BackupStatus AS [Status] FROM dbo.SQLMon_Backup WHERE ServerName='$srv' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) ORDER BY CapturedAt DESC,DatabaseName")
-
     Set-Status "Trends refreshed — last $h hours   server: $($script:serverName)" "LightGreen"
 }
 
@@ -2261,6 +2142,7 @@ $t9 = New-Object System.Windows.Forms.TabPage
 $t9.Text = "  HA & Replication"; $t9.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $tabs.TabPages.Add($t9)
 
+# All 3 stacked top-to-bottom
 $split9a=New-Object System.Windows.Forms.SplitContainer
 $split9a.Dock=[System.Windows.Forms.DockStyle]::Fill; $split9a.Orientation=[System.Windows.Forms.Orientation]::Horizontal
 $split9a.SplitterDistance=280; $split9a.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
@@ -2273,8 +2155,8 @@ $hdr9a=New-SectionPanel "AlwaysOn Availability Groups — AG name, replicas, syn
 $script:gAG=New-DGV; $split9a.Panel1.Controls.Add($script:gAG); $split9a.Panel1.Controls.Add($hdr9a)
 
 $split9b=New-Object System.Windows.Forms.SplitContainer
-$split9b.Dock=[System.Windows.Forms.DockStyle]::Fill; $split9b.Orientation=[System.Windows.Forms.Orientation]::Vertical
-$split9b.SplitterDistance=560; $split9b.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
+$split9b.Dock=[System.Windows.Forms.DockStyle]::Fill; $split9b.Orientation=[System.Windows.Forms.Orientation]::Horizontal
+$split9b.SplitterDistance=220; $split9b.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $split9b.Panel1.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $split9b.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $split9a.Panel2.Controls.Add($split9b)
@@ -2386,6 +2268,12 @@ function Refresh-TabConfig {
             Mark-StaticLogged "IndexHealth"
         }
     }
+    $dtSizes=Invoke-SqlQuery $Q_DBSizes; Bind-Grid $script:gDBSizes $dtSizes
+    if($script:loggingEnabled -and -not $dtSizes.Columns.Contains("Error") -and (Should-LogStatic "DBSize")){
+        Write-ToLogDB "DELETE FROM dbo.SQLMon_DBSize WHERE ServerName='$srv' AND CaptureDate=CAST(GETDATE() AS DATE)"
+        foreach($r in $dtSizes.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_DBSize(ServerName,DatabaseName,DataMB,LogMB,TotalGB) VALUES('$srv','$(EscSql $r['Database'])',$($r['Data MB']),$($r['Log MB']),$($r['Total GB']))" }
+        Mark-StaticLogged "DBSize"
+    }
     Set-Status "Config refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
 }
 
@@ -2403,6 +2291,7 @@ function Refresh-TabBackups {
         }
     }
     Bind-Grid $script:gJob (Invoke-SqlQuery $Q_Jobs)
+    Bind-Grid $script:gDeadlock (Invoke-SqlQuery $Q_Deadlocks)
     Set-Status "Backups & Jobs refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
 }
 
@@ -2449,29 +2338,20 @@ function Refresh-TabSessions {
 
 function Refresh-TabIndexesMem {
     if(-not $script:connected){return}
-    $selDB = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-    Bind-Grid $script:gMissIdx   (Invoke-SqlQuery $Q_MissingIndexes)
-    $script:idxUnusedHdr.Text = "  Unused / Redundant Indexes — DB: $selDB"
-    Bind-Grid $script:gUnusedIdx (Invoke-SqlQuery "USE [$selDB]; $Q_UnusedIndexes")
     $dtMem=Invoke-SqlQuery $Q_MemoryPressure; Bind-Grid $script:gMemChk $dtMem
     if($script:loggingEnabled -and -not $dtMem.Columns.Contains("Error")){
         $srv=EscSql $script:serverName
         Write-ToLogDB "DELETE FROM dbo.SQLMon_Memory WHERE ServerName='$srv' AND CapturedAt>=DATEADD(minute,-2,GETDATE())"
         foreach($r in $dtMem.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_Memory(ServerName,Metric,Value,Status) VALUES('$srv','$(EscSql $r['Metric'])','$(EscSql $r['Value'])','$(EscSql $r['Status'])')" }
     }
-    Bind-Grid $script:gBufDB  (Invoke-SqlQuery $Q_BufferByDB)
-    Bind-Grid $script:gClerks (Invoke-SqlQuery $Q_MemoryClerks)
+    $topN = switch($script:cmbMemTop.SelectedIndex){ 0{5} 1{10} 2{20} 3{50} default{5} }
+    $qBuf = "SELECT TOP $topN CASE WHEN database_id=32767 THEN 'Resource DB' ELSE DB_NAME(database_id) END AS [Database], COUNT(*)*8/1024 AS [Buffer MB], CAST(COUNT(*)*100.0/SUM(COUNT(*)) OVER() AS DECIMAL(5,1)) AS [% of Buffer Pool], SUM(CASE WHEN is_modified=1 THEN 1 ELSE 0 END)*8/1024 AS [Dirty Pages MB] FROM sys.dm_os_buffer_descriptors GROUP BY database_id ORDER BY COUNT(*) DESC"
+    $qClk = "SELECT TOP $topN type AS [Clerk Type], name AS [Name], CAST(pages_kb/1024.0 AS DECIMAL(10,1)) AS [Memory MB], CAST(pages_kb*100.0/NULLIF(SUM(pages_kb) OVER(),0) AS DECIMAL(5,1)) AS [% of Total] FROM sys.dm_os_memory_clerks WHERE pages_kb>0 ORDER BY pages_kb DESC"
+    Bind-Grid $script:gBufDB  (Invoke-SqlQuery $qBuf)
+    Bind-Grid $script:gClerks (Invoke-SqlQuery $qClk)
     Set-Status "Indexes & Memory refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
 }
 
-function Refresh-TabSecurity {
-    if(-not $script:connected){return}
-    Bind-Grid $script:gLongTxn  (Invoke-SqlQuery $Q_LongTxns)
-    Bind-Grid $script:gDeadlock (Invoke-SqlQuery $Q_Deadlocks)
-    Bind-Grid $script:gSecChk   (Invoke-SqlQuery $Q_SecurityChecks)
-    Bind-Grid $script:gSysadmin (Invoke-SqlQuery $Q_SysadminMembers)
-    Set-Status "Security refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
-}
 
 function Refresh-TabHA {
     if(-not $script:connected){return}
@@ -2490,13 +2370,6 @@ function Refresh-TabErrorLog {
 
 function Refresh-TabCapacity {
     if(-not $script:connected){return}
-    $srv = EscSql $script:serverName
-    $dtSizes=Invoke-SqlQuery $Q_DBSizes; Bind-Grid $script:gDBSizes $dtSizes
-    if($script:loggingEnabled -and -not $dtSizes.Columns.Contains("Error") -and (Should-LogStatic "DBSize")){
-        Write-ToLogDB "DELETE FROM dbo.SQLMon_DBSize WHERE ServerName='$srv' AND CaptureDate=CAST(GETDATE() AS DATE)"
-        foreach($r in $dtSizes.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_DBSize(ServerName,DatabaseName,DataMB,LogMB,TotalGB) VALUES('$srv','$(EscSql $r['Database'])',$($r['Data MB']),$($r['Log MB']),$($r['Total GB']))" }
-        Mark-StaticLogged "DBSize"
-    }
     Bind-Grid $script:gAutoGrow (Invoke-SqlQuery $Q_AutoGrowth)
     Bind-Grid $script:gVLF      (Invoke-SqlQuery $Q_VLF)
     $selDB=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
@@ -2508,8 +2381,7 @@ function Refresh-TabCapacity {
 function Refresh-TabQueryStore {
     if(-not $script:connected){return}
     $selDB=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-    $script:qsTopHdr.Text="  Top 20 Queries by CPU (last 24h) — DB: $selDB   requires SQL 2016+  Query Store must be ON"
-    Bind-Grid $script:gQSTop (Invoke-SqlQuery (Get-QSTopQuery $selDB))
+    $script:qsTopHdr.Text="  Regressed Queries — queries that got slower   DB: $selDB   requires SQL 2016+  Query Store must be ON"
     Bind-Grid $script:gQSReg (Invoke-SqlQuery (Get-QSRegressedQuery $selDB))
     Set-Status "Query Store refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
 }
@@ -2560,7 +2432,6 @@ function Refresh-All {
     Refresh-TabQueriesIO
     Refresh-TabSessions
     Refresh-TabIndexesMem
-    Refresh-TabSecurity
     Refresh-TabHA
     Refresh-TabErrorLog
     Refresh-TabCapacity
@@ -2608,12 +2479,9 @@ $cmbDB.add_SelectedIndexChanged({
         $selDB = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
         $script:idxHdrLbl.Text = "  Index Fragmentation Health — DB: $selDB"
         Bind-Grid $script:gIdx (Invoke-SqlQuery (Get-IndexHealthQuery $selDB))
-        $script:idxUnusedHdr.Text = "  Unused / Redundant Indexes — DB: $selDB"
-        Bind-Grid $script:gUnusedIdx (Invoke-SqlQuery "USE [$selDB]; $Q_UnusedIndexes")
         $script:statsHdrLbl.Text = "  Statistics Health — stale stats cause bad query plans   DB: $selDB"
         Bind-Grid $script:gStats (Invoke-SqlQuery (Get-StatsHealthQuery $selDB))
-        $script:qsTopHdr.Text = "  Top 20 Queries by CPU (last 24h) — DB: $selDB"
-        Bind-Grid $script:gQSTop (Invoke-SqlQuery (Get-QSTopQuery $selDB))
+        $script:qsTopHdr.Text = "  Regressed Queries — DB: $selDB"
         Bind-Grid $script:gQSReg (Invoke-SqlQuery (Get-QSRegressedQuery $selDB))
     }
 })
@@ -2633,5 +2501,31 @@ $script:timer=New-Object System.Windows.Forms.Timer
 $script:timer.Interval=30000
 $script:timer.add_Tick({Refresh-Live})
 $script:timer.Start()
+
+# ── Equal 50/50 splits on all SplitContainers ────────────────────────────────
+function Set-EqualSplit($sc) {
+    $sc.add_SizeChanged({
+        param($sender,$e)
+        try {
+            if($sender.Orientation -eq [System.Windows.Forms.Orientation]::Horizontal){
+                $half=[int]($sender.Height/2)
+                if($half -gt $sender.Panel1MinSize -and ($sender.Height-$half-$sender.SplitterWidth) -gt $sender.Panel2MinSize){
+                    $sender.SplitterDistance=$half
+                }
+            } else {
+                $half=[int]($sender.Width/2)
+                if($half -gt $sender.Panel1MinSize -and ($sender.Width-$half-$sender.SplitterWidth) -gt $sender.Panel2MinSize){
+                    $sender.SplitterDistance=$half
+                }
+            }
+        } catch {}
+    })
+}
+
+foreach($sc in @($split1,$split1bot,$split2,$wSplit,$split3outer,$split3,$split4,
+                  $split5a,$split5b,$split5c,$split6top,$split6topH,
+                  $split9a,$split9b,$split10,$split11a,$split11c)){
+    try{ Set-EqualSplit $sc }catch{}
+}
 
 [System.Windows.Forms.Application]::Run($form)
