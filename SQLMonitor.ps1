@@ -1306,8 +1306,40 @@ $script:gDBSizes = New-DGV
 $split1bot.Panel1.Controls.Add($script:gDBSizes)
 $split1bot.Panel1.Controls.Add($hdr1c)
 
-$hdr1b = New-SectionPanel "Index Fragmentation Health — DB: master"
+$hdr1b = New-SectionPanel "Index Fragmentation Health — click Load (can be slow on large DBs)"
 $script:idxHdrLbl = $hdr1b.Controls[0]
+$script:idxHdrLbl.Dock = [System.Windows.Forms.DockStyle]::None
+$script:idxHdrLbl.Location = New-Object System.Drawing.Point(58,4)
+$script:idxHdrLbl.Size = New-Object System.Drawing.Size(700,18)
+$btnIdxLoad = New-Object System.Windows.Forms.Button
+$btnIdxLoad.Text = "Load"; $btnIdxLoad.Size = New-Object System.Drawing.Size(50,18)
+$btnIdxLoad.Location = New-Object System.Drawing.Point(2,4)
+$btnIdxLoad.FlatStyle = "Flat"; $btnIdxLoad.BackColor = [System.Drawing.Color]::FromArgb(0,98,188)
+$btnIdxLoad.ForeColor = [System.Drawing.Color]::White; $btnIdxLoad.Font = New-Object System.Drawing.Font("Segoe UI",8)
+$btnIdxLoad.Cursor = [System.Windows.Forms.Cursors]::Hand
+$hdr1b.Controls.Add($btnIdxLoad)
+$btnIdxLoad.add_Click({
+    if(-not $script:connected){return}
+    $srv   = EscSql $script:serverName
+    $selDB = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
+    $script:idxHdrLbl.Text = "  Index Fragmentation Health — DB: $selDB"
+    Set-Status "Loading index fragmentation for $selDB..." "Yellow"; $form.Refresh()
+    if($script:loggingEnabled -and -not (Should-LogStatic "IndexHealth")){
+        Bind-Grid $script:gIdx (Read-FromLog "SELECT DatabaseName AS [Database],TableName AS [Table],IndexName AS [Index],FragPct AS [Frag %],Pages,Action FROM dbo.SQLMon_IndexHealth WHERE ServerName='$srv' AND DatabaseName='$(EscSql $selDB)' AND CaptureDate=CAST(GETDATE() AS DATE) ORDER BY FragPct DESC")
+    } else {
+        $dtIdx=Invoke-SqlQuery -sql (Get-IndexHealthQuery $selDB) -timeout 120; Bind-Grid $script:gIdx $dtIdx
+        if($script:loggingEnabled -and -not $dtIdx.Columns.Contains("Error")){
+            Write-ToLogDB "DELETE FROM dbo.SQLMon_IndexHealth WHERE ServerName='$srv' AND DatabaseName='$(EscSql $selDB)' AND CaptureDate=CAST(GETDATE() AS DATE)"
+            foreach($r in $dtIdx.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_IndexHealth(ServerName,DatabaseName,TableName,IndexName,FragPct,Pages,Action) VALUES('$srv','$(EscSql $selDB)','$(EscSql $r['Table'])','$(EscSql $r['Index'])',$($r['Frag %']),$($r['Pages']),'$(EscSql $r['Action'])')" }
+            Mark-StaticLogged "IndexHealth"
+        }
+    }
+    if($script:gIdx.Columns.Count -gt 0 -and $script:gIdx.Columns[0].Name -eq "Error"){
+        Set-Status "Index frag error: $($script:gIdx.Rows[0].Cells[0].Value)" "Orange"
+    } else {
+        Set-Status "Index fragmentation loaded: $(Get-Date -F 'HH:mm:ss')   DB: $selDB" "LightGreen"
+    }
+})
 $script:gIdx = New-DGV
 $split1bot.Panel2.Controls.Add($script:gIdx)
 $split1bot.Panel2.Controls.Add($hdr1b)
@@ -2275,17 +2307,6 @@ function Refresh-TabConfig {
             Mark-StaticLogged "Config"
         }
     }
-    $script:idxHdrLbl.Text = "  Index Fragmentation Health — DB: $selDB"
-    if($script:loggingEnabled -and -not (Should-LogStatic "IndexHealth")){
-        Bind-Grid $script:gIdx (Read-FromLog "SELECT DatabaseName AS [Database],TableName AS [Table],IndexName AS [Index],FragPct AS [Frag %],Pages,Action FROM dbo.SQLMon_IndexHealth WHERE ServerName='$srv' AND DatabaseName='$(EscSql $selDB)' AND CaptureDate=CAST(GETDATE() AS DATE) ORDER BY FragPct DESC")
-    } else {
-        $dtIdx=Invoke-SqlQuery (Get-IndexHealthQuery $selDB); Bind-Grid $script:gIdx $dtIdx
-        if($script:loggingEnabled -and -not $dtIdx.Columns.Contains("Error")){
-            Write-ToLogDB "DELETE FROM dbo.SQLMon_IndexHealth WHERE ServerName='$srv' AND DatabaseName='$(EscSql $selDB)' AND CaptureDate=CAST(GETDATE() AS DATE)"
-            foreach($r in $dtIdx.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_IndexHealth(ServerName,DatabaseName,TableName,IndexName,FragPct,Pages,Action) VALUES('$srv','$(EscSql $selDB)','$(EscSql $r['Table'])','$(EscSql $r['Index'])',$($r['Frag %']),$($r['Pages']),'$(EscSql $r['Action'])')" }
-            Mark-StaticLogged "IndexHealth"
-        }
-    }
     $dtSizes=Invoke-SqlQuery $Q_DBSizes; Bind-Grid $script:gDBSizes $dtSizes
     if($script:loggingEnabled -and -not $dtSizes.Columns.Contains("Error") -and (Should-LogStatic "DBSize")){
         Write-ToLogDB "DELETE FROM dbo.SQLMon_DBSize WHERE ServerName='$srv' AND CaptureDate=CAST(GETDATE() AS DATE)"
@@ -2493,8 +2514,7 @@ $btnRef.add_Click({ Refresh-All })
 $cmbDB.add_SelectedIndexChanged({
     if($script:connected){
         $selDB = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-        $script:idxHdrLbl.Text = "  Index Fragmentation Health — DB: $selDB"
-        Bind-Grid $script:gIdx (Invoke-SqlQuery (Get-IndexHealthQuery $selDB))
+        $script:idxHdrLbl.Text = "  Index Fragmentation Health — DB: $selDB  (click Load to refresh)"
         $script:statsHdrLbl.Text = "  Statistics Health — stale stats cause bad query plans   DB: $selDB"
         Bind-Grid $script:gStats (Invoke-SqlQuery (Get-StatsHealthQuery $selDB))
         $script:qsTopHdr.Text = "  Regressed Queries — DB: $selDB"
