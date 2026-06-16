@@ -16,14 +16,16 @@ $script:serverName       = ""
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
 
-function Invoke-SqlQuery([string]$sql) {
+function Invoke-SqlQuery([string]$sql, [int]$timeout=25) {
     $dt = New-Object System.Data.DataTable
     try {
         $cn  = New-Object System.Data.SqlClient.SqlConnection($script:connString)
         $cn.Open()
         $cmd = $cn.CreateCommand()
+        $cmd.CommandText = "SET ARITHABORT ON; SET NOCOUNT ON;"
+        [void]$cmd.ExecuteNonQuery()
         $cmd.CommandText    = $sql
-        $cmd.CommandTimeout = 25
+        $cmd.CommandTimeout = $timeout
         $da  = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
         [void]$da.Fill($dt)
         $cn.Close()
@@ -2345,9 +2347,9 @@ function Refresh-TabIndexesMem {
         foreach($r in $dtMem.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_Memory(ServerName,Metric,Value,Status) VALUES('$srv','$(EscSql $r['Metric'])','$(EscSql $r['Value'])','$(EscSql $r['Status'])')" }
     }
     $topN = switch($script:cmbMemTop.SelectedIndex){ 0{5} 1{10} 2{20} 3{50} default{5} }
-    $qBuf = "SELECT TOP $topN CASE WHEN database_id=32767 THEN 'Resource DB' ELSE DB_NAME(database_id) END AS [Database], COUNT(*)*8/1024 AS [Buffer MB], CAST(COUNT(*)*100.0/SUM(COUNT(*)) OVER() AS DECIMAL(5,1)) AS [% of Buffer Pool], SUM(CASE WHEN is_modified=1 THEN 1 ELSE 0 END)*8/1024 AS [Dirty Pages MB] FROM sys.dm_os_buffer_descriptors GROUP BY database_id ORDER BY COUNT(*) DESC"
+    $qBuf = "SET NOCOUNT ON; SET ARITHABORT ON; SELECT TOP $topN CASE WHEN database_id=32767 THEN 'Resource DB' ELSE DB_NAME(database_id) END AS [Database], COUNT(*)*8/1024 AS [Buffer MB], CAST(COUNT(*)*100.0/SUM(COUNT(*)) OVER() AS DECIMAL(5,1)) AS [% of Buffer Pool], SUM(CASE WHEN is_modified=1 THEN 1 ELSE 0 END)*8/1024 AS [Dirty Pages MB] FROM sys.dm_os_buffer_descriptors WITH (NOLOCK) GROUP BY database_id ORDER BY COUNT(*) DESC"
     $qClk = "SELECT TOP $topN type AS [Clerk Type], name AS [Name], CAST(pages_kb/1024.0 AS DECIMAL(10,1)) AS [Memory MB], CAST(pages_kb*100.0/NULLIF(SUM(pages_kb) OVER(),0) AS DECIMAL(5,1)) AS [% of Total] FROM sys.dm_os_memory_clerks WHERE pages_kb>0 ORDER BY pages_kb DESC"
-    Bind-Grid $script:gBufDB  (Invoke-SqlQuery $qBuf)
+    Bind-Grid $script:gBufDB  (Invoke-SqlQuery -sql $qBuf -timeout 120)
     Bind-Grid $script:gClerks (Invoke-SqlQuery $qClk)
     Set-Status "Indexes & Memory refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
 }
@@ -2445,7 +2447,7 @@ $btnConn.add_Click({
         [System.Windows.Forms.MessageBox]::Show("Please enter a server name.","SQL Monitor",0,48)|Out-Null; return
     }
     if($cmbAuth.SelectedIndex -eq 0){
-        $script:connString="Server=$srv;Database=master;Integrated Security=True;Connection Timeout=10;"
+        $script:connString="Server=$srv;Database=master;Integrated Security=True;Connection Timeout=10;Application Name=SQLMonitor;"
     } else {
         $script:connString="Server=$srv;Database=master;User Id=$($txtUser.Text);Password=$($txtPwd.Text);Connection Timeout=10;"
     }
