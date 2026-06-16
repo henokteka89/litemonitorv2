@@ -22,8 +22,6 @@ function Invoke-SqlQuery([string]$sql, [int]$timeout=25) {
         $cn  = New-Object System.Data.SqlClient.SqlConnection($script:connString)
         $cn.Open()
         $cmd = $cn.CreateCommand()
-        $cmd.CommandText = "SET ARITHABORT ON; SET NOCOUNT ON;"
-        [void]$cmd.ExecuteNonQuery()
         $cmd.CommandText    = $sql
         $cmd.CommandTimeout = $timeout
         $da  = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
