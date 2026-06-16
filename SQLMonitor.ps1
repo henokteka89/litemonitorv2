@@ -1055,49 +1055,54 @@ function Get-QSRegressedQuery([string]$db,[int]$recentMinutes=30){
 USE [$db];
 IF EXISTS(SELECT 1 FROM sys.database_query_store_options WHERE actual_state IN (1,2))
 BEGIN
-  WITH recent AS (
-    SELECT q.query_id, p.plan_id,
-      AVG(rs.avg_duration)         AS avg_duration,
-      AVG(rs.avg_cpu_time)         AS avg_cpu,
-      AVG(rs.avg_logical_io_reads) AS avg_reads,
-      SUM(rs.count_executions)     AS exec_count
-    FROM sys.query_store_query q
-    JOIN sys.query_store_plan p              ON q.query_id  = p.query_id
-    JOIN sys.query_store_runtime_stats rs    ON p.plan_id   = rs.plan_id
-    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id = ri.runtime_stats_interval_id
-    WHERE ri.start_time >= DATEADD(minute,-$recentMinutes,GETDATE())
-    GROUP BY q.query_id, p.plan_id
-  ),
-  baseline AS (
-    SELECT q.query_id,
-      AVG(rs.avg_duration)         AS avg_duration,
-      AVG(rs.avg_cpu_time)         AS avg_cpu,
-      AVG(rs.avg_logical_io_reads) AS avg_reads
-    FROM sys.query_store_query q
-    JOIN sys.query_store_plan p              ON q.query_id  = p.query_id
-    JOIN sys.query_store_runtime_stats rs    ON p.plan_id   = rs.plan_id
-    JOIN sys.query_store_runtime_stats_interval ri ON rs.runtime_stats_interval_id = ri.runtime_stats_interval_id
-    WHERE ri.start_time >= DATEADD(day,-30,GETDATE())
-      AND ri.start_time <  DATEADD(minute,-$recentMinutes,GETDATE())
-    GROUP BY q.query_id
-  )
+  -- Step 1: recent query_ids only (small set from narrow time window)
+  CREATE TABLE #recent (
+    query_id   BIGINT, plan_id BIGINT,
+    avg_dur    FLOAT, avg_cpu FLOAT, avg_reads FLOAT, exec_cnt BIGINT
+  );
+  INSERT INTO #recent
+  SELECT q.query_id, p.plan_id,
+    AVG(rs.avg_duration), AVG(rs.avg_cpu_time),
+    AVG(rs.avg_logical_io_reads), SUM(rs.count_executions)
+  FROM sys.query_store_runtime_stats_interval ri
+  JOIN sys.query_store_runtime_stats rs ON ri.runtime_stats_interval_id = rs.runtime_stats_interval_id
+  JOIN sys.query_store_plan p           ON rs.plan_id   = p.plan_id
+  JOIN sys.query_store_query q          ON p.query_id   = q.query_id
+  WHERE ri.start_time >= DATEADD(minute,-$recentMinutes,GETDATE())
+  GROUP BY q.query_id, p.plan_id;
+
+  -- Step 2: baseline only for those same query_ids (avoids full table scan)
+  CREATE TABLE #baseline (query_id BIGINT, avg_dur FLOAT, avg_cpu FLOAT, avg_reads FLOAT);
+  INSERT INTO #baseline
+  SELECT q.query_id,
+    AVG(rs.avg_duration), AVG(rs.avg_cpu_time), AVG(rs.avg_logical_io_reads)
+  FROM sys.query_store_runtime_stats_interval ri
+  JOIN sys.query_store_runtime_stats rs ON ri.runtime_stats_interval_id = rs.runtime_stats_interval_id
+  JOIN sys.query_store_plan p           ON rs.plan_id  = p.plan_id
+  JOIN sys.query_store_query q          ON p.query_id  = q.query_id
+  WHERE ri.start_time >= DATEADD(day,-2,GETDATE())
+    AND ri.start_time <  DATEADD(minute,-$recentMinutes,GETDATE())
+    AND q.query_id IN (SELECT query_id FROM #recent)
+  GROUP BY q.query_id;
+
   SELECT TOP 25
-    r.query_id                                                                        AS [Query ID],
-    CAST(r.avg_duration/1000.0 AS DECIMAL(18,1))                                     AS [Recent ms],
-    CAST(b.avg_duration/1000.0 AS DECIMAL(18,1))                                     AS [Baseline ms],
-    CAST((r.avg_duration-b.avg_duration)*100.0/NULLIF(b.avg_duration,0) AS DECIMAL(10,1)) AS [Regressed %],
-    CAST(r.avg_cpu/1000.0     AS DECIMAL(18,1))                                      AS [Avg CPU ms],
-    CAST(r.avg_reads          AS BIGINT)                                              AS [Avg Reads],
-    r.exec_count                                                                      AS [Execs],
-    ISNULL(OBJECT_NAME(q.object_id),'')                                               AS [Object],
-    LEFT(qt.query_sql_text,500)                                                       AS [SQL Text]
-  FROM recent r
-  JOIN baseline b                   ON r.query_id = b.query_id
-  JOIN sys.query_store_query q      ON r.query_id = q.query_id
-  JOIN sys.query_store_query_text qt ON q.query_text_id = qt.query_text_id
-  WHERE r.avg_duration > b.avg_duration * 1.2
-    AND r.exec_count >= 1
-  ORDER BY [Regressed %] DESC
+    r.query_id                                                                         AS [Query ID],
+    CAST(r.avg_dur/1000.0  AS DECIMAL(18,1))                                          AS [Recent ms],
+    CAST(b.avg_dur/1000.0  AS DECIMAL(18,1))                                          AS [Baseline ms],
+    CAST((r.avg_dur-b.avg_dur)*100.0/NULLIF(b.avg_dur,0) AS DECIMAL(10,1))            AS [Regressed %],
+    CAST(r.avg_cpu/1000.0  AS DECIMAL(18,1))                                          AS [Avg CPU ms],
+    CAST(r.avg_reads       AS BIGINT)                                                  AS [Avg Reads],
+    r.exec_cnt                                                                         AS [Execs],
+    ISNULL(OBJECT_NAME(q.object_id),'')                                                AS [Object],
+    LEFT(qt.query_sql_text,500)                                                        AS [SQL Text]
+  FROM #recent r
+  JOIN #baseline b                    ON r.query_id = b.query_id
+  JOIN sys.query_store_query q        ON r.query_id = q.query_id
+  JOIN sys.query_store_query_text qt  ON q.query_text_id = qt.query_text_id
+  WHERE r.avg_dur > b.avg_dur * 1.2
+  ORDER BY [Regressed %] DESC;
+
+  DROP TABLE #recent; DROP TABLE #baseline;
 END
 ELSE SELECT 'Query Store not active on [$db] — run: ALTER DATABASE [$db] SET QUERY_STORE = ON (OPERATION_MODE = READ_WRITE)' AS [Status]
 "@
@@ -1987,8 +1992,22 @@ $split11a.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $t11.Controls.Add($split11a)
 Add-RefreshBar $t11 { Refresh-TabCapacity }
 
-# Top: Auto-Growth events
-$hdr11b=New-SectionPanel "Auto-Growth Events (from default trace) — indicates undersized files"
+# Top: Auto-Growth events (load-on-demand — fn_trace_gettable can be slow)
+$hdr11b=New-SectionPanel "Auto-Growth Events (from default trace) — click Load"
+$script:agHdrLbl=$hdr11b.Controls[0]
+$script:agHdrLbl.Dock=[System.Windows.Forms.DockStyle]::None; $script:agHdrLbl.Location=[System.Drawing.Point]::new(58,4); $script:agHdrLbl.Size=[System.Drawing.Size]::new(700,18)
+$btnAgLoad=New-Object System.Windows.Forms.Button
+$btnAgLoad.Text="Load"; $btnAgLoad.Location=[System.Drawing.Point]::new(2,4); $btnAgLoad.Size=[System.Drawing.Size]::new(50,18)
+$btnAgLoad.FlatStyle="Flat"; $btnAgLoad.BackColor=[System.Drawing.Color]::FromArgb(0,98,188); $btnAgLoad.ForeColor=[System.Drawing.Color]::White
+$btnAgLoad.Font=New-Object System.Drawing.Font("Segoe UI",8,[System.Drawing.FontStyle]::Bold); $btnAgLoad.Cursor=[System.Windows.Forms.Cursors]::Hand
+$btnAgLoad.FlatAppearance.BorderColor=[System.Drawing.Color]::FromArgb(0,140,230)
+$btnAgLoad.add_Click({
+    if(-not $script:connected){return}
+    Set-Status "Loading auto-growth events..." "Yellow"; $form.Refresh()
+    Bind-Grid $script:gAutoGrow (Invoke-SqlQuery $Q_AutoGrowth)
+    Set-Status "Auto-growth loaded: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+})
+$hdr11b.Controls.Add($btnAgLoad)   # button added after label.Dock=None — button is now visible
 $script:gAutoGrow=New-DGV
 $split11a.Panel1.Controls.Add($script:gAutoGrow); $split11a.Panel1.Controls.Add($hdr11b)
 
@@ -2062,6 +2081,7 @@ $btnQSRefresh.ForeColor = [System.Drawing.Color]::White
 $btnQSRefresh.Font = New-Object System.Drawing.Font("Segoe UI",9,[System.Drawing.FontStyle]::Bold)
 $btnQSRefresh.Cursor = [System.Windows.Forms.Cursors]::Hand
 $btnQSRefresh.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0,140,230)
+$btnQSRefresh.Text = "Load"
 $btnQSRefresh.add_Click({ Refresh-TabQueryStore })
 $lblQSWin = New-Object System.Windows.Forms.Label
 $lblQSWin.Text = "Window:"; $lblQSWin.ForeColor = [System.Drawing.Color]::Silver
@@ -2468,7 +2488,6 @@ function Refresh-TabErrorLog {
 
 function Refresh-TabCapacity {
     if(-not $script:connected){return}
-    Bind-Grid $script:gAutoGrow (Invoke-SqlQuery $Q_AutoGrowth)
     Bind-Grid $script:gVLF      (Invoke-SqlQuery $Q_VLF)
     $selDB=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
     $script:statsHdrLbl.Text="  Statistics Health — stale stats cause bad query plans   DB: $selDB"
@@ -2534,7 +2553,6 @@ function Refresh-All {
     Refresh-TabHA
     Refresh-TabErrorLog
     Refresh-TabCapacity
-    Refresh-TabQueryStore
     Set-Status "Full refresh: $(Get-Date -Format 'HH:mm:ss')   Connected to: $($txtSrv.Text)" "LightGreen"
 }
 
