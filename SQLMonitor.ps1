@@ -87,6 +87,26 @@ function New-SectionPanel([string]$text) {
     return $p
 }
 
+function Add-RefreshBar($tab, [scriptblock]$onClick) {
+    $bar = New-Object System.Windows.Forms.Panel
+    $bar.Dock      = [System.Windows.Forms.DockStyle]::Top
+    $bar.Height    = 28
+    $bar.BackColor = [System.Drawing.Color]::FromArgb(32,32,40)
+    $btn = New-Object System.Windows.Forms.Button
+    $btn.Text      = [char]0x21BB + " Refresh"
+    $btn.Size      = New-Object System.Drawing.Size(90,22)
+    $btn.Location  = New-Object System.Drawing.Point(4,3)
+    $btn.FlatStyle = "Flat"
+    $btn.BackColor = [System.Drawing.Color]::FromArgb(0,98,188)
+    $btn.ForeColor = [System.Drawing.Color]::White
+    $btn.Font      = New-Object System.Drawing.Font("Segoe UI",9,[System.Drawing.FontStyle]::Bold)
+    $btn.Cursor    = [System.Windows.Forms.Cursors]::Hand
+    $btn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0,140,230)
+    $btn.add_Click($onClick)
+    $bar.Controls.Add($btn)
+    $tab.Controls.Add($bar)
+}
+
 # Adds header+grid into a Panel using Dock (no TableLayoutPanel needed in tabs)
 function New-GridPanel([string]$header) {
     $outer = New-Object System.Windows.Forms.Panel
@@ -1263,6 +1283,7 @@ $split1.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split1.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $t1.Controls.Add($split1)
+Add-RefreshBar $t1 { Refresh-TabConfig }
 
 $hdr1a = New-SectionPanel "Server Configuration & Best Practice Checks   GREEN=OK  ORANGE=Warning  BLUE=Info"
 $script:gCfg = New-DGV
@@ -1538,6 +1559,7 @@ $split3.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split3.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split3.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $t3.Controls.Add($split3)
+Add-RefreshBar $t3 { Refresh-TabBackups }
 
 $hdr3a = New-SectionPanel "Database Backup Status   RED=Never backed up  ORANGE=Overdue  GREEN=OK"
 $script:gBak = New-DGV
@@ -1589,6 +1611,7 @@ $split4.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split4.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split4.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $t4.Controls.Add($split4)
+Add-RefreshBar $t4 { Refresh-TabQueriesIO }
 
 $hdr4a = New-SectionPanel "Top 20 Slowest Queries by Avg Elapsed Time (since last SQL Server restart)"
 $script:gTopQ = New-DGV
@@ -1630,6 +1653,7 @@ $split5a.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split5a.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split5a.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $t5.Controls.Add($split5a)
+Add-RefreshBar $t5 { Refresh-TabSessions }
 
 # Top panel: drive space (left) | db files (right)
 $split5b = New-Object System.Windows.Forms.SplitContainer
@@ -1749,6 +1773,7 @@ $split6outer.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split6outer.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split6outer.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $t6.Controls.Add($split6outer)
+Add-RefreshBar $t6 { Refresh-TabIndexesMem }
 
 # Top: missing indexes (left) | unused indexes (right)
 $split6top = New-Object System.Windows.Forms.SplitContainer
@@ -1860,6 +1885,7 @@ $split7outer.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split7outer.Panel1.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $split7outer.Panel2.BackColor = [System.Drawing.Color]::FromArgb(28,28,32)
 $t7.Controls.Add($split7outer)
+Add-RefreshBar $t7 { Refresh-TabSecurity }
 
 # Top: long transactions (left) | deadlocks (right)
 $split7top = New-Object System.Windows.Forms.SplitContainer
@@ -1951,6 +1977,7 @@ $split10.SplitterDistance=420; $split10.BackColor=[System.Drawing.Color]::FromAr
 $split10.Panel1.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $split10.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $t10.Controls.Add($split10)
+Add-RefreshBar $t10 { Refresh-TabErrorLog }
 
 $hdr10a=New-SectionPanel "SQL Server Error Log — Errors, Warnings & I/O issues (informational noise filtered out)"
 $script:gErrLog=New-DGV; $split10.Panel1.Controls.Add($script:gErrLog); $split10.Panel1.Controls.Add($hdr10a)
@@ -1980,6 +2007,7 @@ $split11a.SplitterDistance=300; $split11a.BackColor=[System.Drawing.Color]::From
 $split11a.Panel1.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $split11a.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $t11.Controls.Add($split11a)
+Add-RefreshBar $t11 { Refresh-TabCapacity }
 
 $split11b=New-Object System.Windows.Forms.SplitContainer
 $split11b.Dock=[System.Windows.Forms.DockStyle]::Fill; $split11b.Orientation=[System.Windows.Forms.Orientation]::Vertical
@@ -2053,6 +2081,7 @@ $split12.SplitterDistance=380; $split12.BackColor=[System.Drawing.Color]::FromAr
 $split12.Panel1.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $split12.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $t12.Controls.Add($split12)
+Add-RefreshBar $t12 { Refresh-TabQueryStore }
 
 $hdr12a=New-SectionPanel "Top 20 Queries by CPU (last 24h) — DB: master   requires SQL 2016+  Query Store must be ON"
 $script:qsTopHdr=$hdr12a.Controls[0]
@@ -2148,8 +2177,6 @@ function New-TrendGridTab($title) {
 $script:chTrendCPU    = New-TrendChartTab "CPU %"
 $script:chTrendWaits  = New-TrendChartTab "Wait Stats"
 $script:chTrendMem    = New-TrendChartTab "Memory (PLE)"
-$script:chTrendIO     = New-TrendChartTab "Disk I/O ms"
-$script:chTrendDBSize = New-TrendChartTab "DB Growth"
 $script:gTrendCfg     = New-TrendGridTab  "Config History"
 $script:gTrendBackup  = New-TrendGridTab  "Backup History"
 
@@ -2222,47 +2249,6 @@ function Refresh-Trends {
     $script:chTrendMem.ChartAreas[0].AxisY.StripLines.Clear()
     [void]$script:chTrendMem.ChartAreas[0].AxisY.StripLines.Add($strip)
 
-    # ── Disk I/O — per file avg read/write latency bar chart ─────────────────
-    $script:chTrendIO.Series.Clear()
-    $script:chTrendIO.ChartAreas[0].AxisX.LabelStyle.Format = ""
-    $script:chTrendIO.ChartAreas[0].AxisX.LabelStyle.Angle  = -40
-    $dtIO = Read-FromLog "SELECT TOP 15 DatabaseName, CAST(AVG(AvgReadMs) AS FLOAT) AS AvgRead, CAST(AVG(AvgWriteMs) AS FLOAT) AS AvgWrite FROM dbo.SQLMon_DiskIO WHERE ServerName='$srv' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) GROUP BY DatabaseName ORDER BY AVG(AvgReadMs) DESC"
-    $srRead  = New-Object System.Windows.Forms.DataVisualization.Charting.Series
-    $srWrite = New-Object System.Windows.Forms.DataVisualization.Charting.Series
-    $srRead.Name="Avg Read ms";   $srRead.Color=$blue;   $srRead.ChartType=[System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Column
-    $srWrite.Name="Avg Write ms"; $srWrite.Color=$orange; $srWrite.ChartType=[System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Column
-    $srRead.IsValueShownAsLabel  = $true
-    $srWrite.IsValueShownAsLabel = $true
-    $srRead.LabelForeColor  = [System.Drawing.Color]::FromArgb(180,180,180)
-    $srWrite.LabelForeColor = [System.Drawing.Color]::FromArgb(180,180,180)
-    $i=0
-    foreach($row in $dtIO.Rows){
-        try{
-            $lbl = "$($row['DatabaseName'])"
-            $pr=New-Object System.Windows.Forms.DataVisualization.Charting.DataPoint; $pr.SetValueXY($i,[double]$row['AvgRead']);  $pr.AxisLabel=$lbl; $pr.Color=$blue;   [void]$srRead.Points.Add($pr)
-            $pw=New-Object System.Windows.Forms.DataVisualization.Charting.DataPoint; $pw.SetValueXY($i,[double]$row['AvgWrite']); $pw.AxisLabel=$lbl; $pw.Color=$orange; [void]$srWrite.Points.Add($pw)
-            $i++
-        }catch{}
-    }
-    [void]$script:chTrendIO.Series.Add($srRead)
-    [void]$script:chTrendIO.Series.Add($srWrite)
-
-    # ── DB Growth chart — top 8 DBs by size, line per DB over time ───────────
-    $script:chTrendDBSize.Series.Clear()
-    $script:chTrendDBSize.ChartAreas[0].AxisX.LabelStyle.Format = "MM/dd HH:mm"
-    $dtDBG = Read-FromLog "SELECT TOP 8 DatabaseName FROM dbo.SQLMon_DBSize WHERE ServerName='$srv' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) GROUP BY DatabaseName ORDER BY MAX(TotalGB) DESC"
-    $colors = @($blue,$orange,$green,$red,[System.Drawing.Color]::Magenta,[System.Drawing.Color]::Cyan,[System.Drawing.Color]::Yellow,[System.Drawing.Color]::White)
-    $ci=0
-    foreach($dbRow in $dtDBG.Rows){
-        $dbn=EscSql "$($dbRow['DatabaseName'])"; $dbLabel="$($dbRow['DatabaseName'])"
-        $dtG=Read-FromLog "SELECT MIN(CapturedAt) AS CapturedAt, AVG(TotalGB) AS TotalGB FROM dbo.SQLMon_DBSize WHERE ServerName='$srv' AND DatabaseName='$dbn' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) GROUP BY CaptureDate ORDER BY MIN(CapturedAt)"
-        if($dtG.Rows.Count -gt 0){
-            $lineType=[System.Windows.Forms.DataVisualization.Charting.SeriesChartType]::Line
-            Add-LineSeries $script:chTrendDBSize $dbLabel $colors[$ci % $colors.Count] $dtG "CapturedAt" "TotalGB"
-        }
-        $ci++
-    }
-
     # ── Config & Backup as grids (discrete/daily data) ───────────────────────
     Bind-Grid $script:gTrendCfg    (Read-FromLog "SELECT CaptureDate AS [Date],Setting,Value,Status FROM dbo.SQLMon_Config WHERE ServerName='$srv' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) ORDER BY CapturedAt DESC,Setting")
     Bind-Grid $script:gTrendBackup (Read-FromLog "SELECT CaptureDate AS [Date],DatabaseName AS [Database],LastFullBackup AS [Last Full],BackupStatus AS [Status] FROM dbo.SQLMon_Backup WHERE ServerName='$srv' AND CapturedAt>=DATEADD(hour,-$h,GETDATE()) ORDER BY CapturedAt DESC,DatabaseName")
@@ -2281,6 +2267,7 @@ $split9a.SplitterDistance=280; $split9a.BackColor=[System.Drawing.Color]::FromAr
 $split9a.Panel1.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $split9a.Panel2.BackColor=[System.Drawing.Color]::FromArgb(28,28,32)
 $t9.Controls.Add($split9a)
+Add-RefreshBar $t9 { Refresh-TabHA }
 
 $hdr9a=New-SectionPanel "AlwaysOn Availability Groups — AG name, replicas, sync state, lag   GREEN=Healthy  ORANGE=Warning  RED=Critical"
 $script:gAG=New-DGV; $split9a.Panel1.Controls.Add($script:gAG); $split9a.Panel1.Controls.Add($hdr9a)
@@ -2373,13 +2360,11 @@ $btnPurge.add_Click({
 
 $btnRefTrend.add_Click({ Refresh-Trends })
 
-function Refresh-All {
+# ── Per-tab refresh functions ─────────────────────────────────────────────────
+function Refresh-TabConfig {
     if(-not $script:connected){return}
-    Set-Status "Refreshing data..." "Yellow"
-    $form.Refresh()
-    $srv = EscSql $script:serverName
-
-    # ── CONFIG (static: once/day when logging) ────────────────────────────────
+    $srv   = EscSql $script:serverName
+    $selDB = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
     if($script:loggingEnabled -and -not (Should-LogStatic "Config")){
         Bind-Grid $script:gCfg (Read-FromLog "SELECT Setting,Value,Recommendation,Status FROM dbo.SQLMon_Config WHERE ServerName='$srv' AND CaptureDate=CAST(GETDATE() AS DATE) ORDER BY ID")
     } else {
@@ -2390,10 +2375,6 @@ function Refresh-All {
             Mark-StaticLogged "Config"
         }
     }
-
-    $selDB = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-
-    # ── INDEX HEALTH (static: once/day when logging) ──────────────────────────
     $script:idxHdrLbl.Text = "  Index Fragmentation Health — DB: $selDB"
     if($script:loggingEnabled -and -not (Should-LogStatic "IndexHealth")){
         Bind-Grid $script:gIdx (Read-FromLog "SELECT DatabaseName AS [Database],TableName AS [Table],IndexName AS [Index],FragPct AS [Frag %],Pages,Action FROM dbo.SQLMon_IndexHealth WHERE ServerName='$srv' AND DatabaseName='$(EscSql $selDB)' AND CaptureDate=CAST(GETDATE() AS DATE) ORDER BY FragPct DESC")
@@ -2405,54 +2386,12 @@ function Refresh-All {
             Mark-StaticLogged "IndexHealth"
         }
     }
+    Set-Status "Config refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # ── CPU (dynamic — log every refresh) ────────────────────────────────────
-    if($script:loggingEnabled){
-        $dtCPUNow=Invoke-SqlQuery $Q_CPU
-        if(-not $dtCPUNow.Columns.Contains("Error") -and $dtCPUNow.Rows.Count -gt 0){
-            $r=$dtCPUNow.Rows[0]; Write-ToLogDB "INSERT INTO dbo.SQLMon_CPU(ServerName,SQLCPUPct,OtherCPUPct,IdlePct) VALUES('$srv',$($r['SQL CPU %']),$($r['Other CPU %']),$($r['Idle %']))"
-        }
-    }
-
-    # CPU history chart
-    $dcHist = Invoke-SqlQuery $Q_CPUHistory
-    if($dcHist.Rows.Count -gt 0 -and -not $dcHist.Columns.Contains("Error")){
-        $script:cpuHistory.Clear()
-        $script:cpuTimes.Clear()
-        # Rows come newest-first; reverse so chart goes left=oldest right=newest
-        $rows = @($dcHist.Rows)
-        [array]::Reverse($rows)
-        foreach($rh in $rows){
-            $sqlPct = [int]"$($rh['SQL CPU %'])"
-            $othPct = [int]"$($rh['Other CPU %'])"
-            $script:cpuHistory.Add(@($sqlPct,$othPct))
-            # Format timestamp as HH:mm:ss
-            try {
-                $ts = [datetime]$rh['Recorded At']
-                $script:cpuTimes.Add($ts.ToString('HH:mm:ss'))
-            } catch {
-                $script:cpuTimes.Add("")
-            }
-        }
-        $lastRow = $dcHist.Rows[0]
-        $sqlNow = $lastRow['SQL CPU %']; $othNow = $lastRow['Other CPU %']; $idlNow = $lastRow['Idle %']
-        $script:lSql.Text = "SQL CPU: $sqlNow%"
-        $script:lOth.Text = "Other: $othNow%"
-        $script:lIdl.Text = "Idle: $idlNow%"
-        $script:cpuHdrLbl.Text = "  CPU History — $($script:cpuHistory.Count) snapshots   BLUE=SQL Server  ORANGE=Other processes   now: SQL $sqlNow%  Other $othNow%  Idle $idlNow%"
-        $script:cpuChart.Invalidate()
-    }
-    Bind-Grid $script:gReq  (Invoke-SqlQuery $Q_ActiveReqs)
-
-    # ── WAIT STATS (dynamic — log every refresh) ──────────────────────────────
-    $dtWait=Invoke-SqlQuery $Q_WaitStats; Bind-Grid $script:gWait $dtWait
-    if($script:loggingEnabled -and -not $dtWait.Columns.Contains("Error")){
-        Write-ToLogDB "DELETE FROM dbo.SQLMon_WaitStats WHERE ServerName='$srv' AND CapturedAt>=DATEADD(minute,-2,GETDATE())"
-        foreach($r in $dtWait.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_WaitStats(ServerName,WaitType,WaitCount,TotalWaitSec,MaxWaitSec) VALUES('$srv','$(EscSql $r['Wait Type'])',$($r['Wait Count']),$($r['Total Wait Sec']),$($r['Max Wait Sec']))" }
-    }
-    Bind-Grid $script:gBlk  (Invoke-SqlQuery $Q_Blocking)
-
-    # ── BACKUP STATUS (static: once/day when logging) ─────────────────────────
+function Refresh-TabBackups {
+    if(-not $script:connected){return}
+    $srv = EscSql $script:serverName
     if($script:loggingEnabled -and -not (Should-LogStatic "Backup")){
         Bind-Grid $script:gBak (Read-FromLog "SELECT DatabaseName AS [Database],RecoveryModel AS [Recovery Model],LastFullBackup AS [Last Full Backup],BackupStatus AS [Backup Status] FROM dbo.SQLMon_Backup WHERE ServerName='$srv' AND CaptureDate=CAST(GETDATE() AS DATE) ORDER BY DatabaseName")
     } else {
@@ -2463,81 +2402,95 @@ function Refresh-All {
             Mark-StaticLogged "Backup"
         }
     }
-    Bind-Grid $script:gJob  (Invoke-SqlQuery $Q_Jobs)
+    Bind-Grid $script:gJob (Invoke-SqlQuery $Q_Jobs)
+    Set-Status "Backups & Jobs refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
+function Refresh-TabQueriesIO {
+    if(-not $script:connected){return}
+    $srv = EscSql $script:serverName
     Bind-Grid $script:gTopQ (Invoke-SqlQuery $Q_TopQ)
-
-    # ── DISK I/O (dynamic — log every refresh) ───────────────────────────────
     $dtIO=Invoke-SqlQuery $Q_DiskIO; Bind-Grid $script:gIO $dtIO
     if($script:loggingEnabled -and -not $dtIO.Columns.Contains("Error")){
         Write-ToLogDB "DELETE FROM dbo.SQLMon_DiskIO WHERE ServerName='$srv' AND CapturedAt>=DATEADD(minute,-2,GETDATE())"
         foreach($r in $dtIO.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_DiskIO(ServerName,DatabaseName,FilePath,AvgReadMs,AvgWriteMs) VALUES('$srv','$(EscSql $r['Database'])','$(EscSql $r['File Path'])',$($r['Avg Read ms']),$($r['Avg Write ms']))" }
     }
+    Set-Status "Queries & I/O refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # ── MEMORY (dynamic — log every refresh) ─────────────────────────────────
-    $dtMem=Invoke-SqlQuery $Q_MemoryPressure
-    if($script:loggingEnabled -and -not $dtMem.Columns.Contains("Error")){
-        Write-ToLogDB "DELETE FROM dbo.SQLMon_Memory WHERE ServerName='$srv' AND CapturedAt>=DATEADD(minute,-2,GETDATE())"
-        foreach($r in $dtMem.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_Memory(ServerName,Metric,Value,Status) VALUES('$srv','$(EscSql $r['Metric'])','$(EscSql $r['Value'])','$(EscSql $r['Status'])')" }
-    }
-
-
-    # Tab 5 - Drive space via WMI then SQL
+function Refresh-TabSessions {
+    if(-not $script:connected){return}
     try {
         $driveDT = New-Object System.Data.DataTable
-        [void]$driveDT.Columns.Add("Drive")
-        [void]$driveDT.Columns.Add("Total GB")
-        [void]$driveDT.Columns.Add("Free GB")
-        [void]$driveDT.Columns.Add("Used GB")
-        [void]$driveDT.Columns.Add("Free %")
-        [void]$driveDT.Columns.Add("Status")
+        [void]$driveDT.Columns.Add("Drive"); [void]$driveDT.Columns.Add("Total GB")
+        [void]$driveDT.Columns.Add("Free GB"); [void]$driveDT.Columns.Add("Used GB")
+        [void]$driveDT.Columns.Add("Free %"); [void]$driveDT.Columns.Add("Status")
         $wmiDrives = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" -ComputerName $txtSrv.Text.Split("\")[0].Split(",")[0] -ErrorAction SilentlyContinue
         if(-not $wmiDrives){ $wmiDrives = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" }
         foreach($d in $wmiDrives){
-            $totalGB = [math]::Round($d.Size/1GB,1)
-            $freeGB  = [math]::Round($d.FreeSpace/1GB,1)
-            $usedGB  = [math]::Round(($d.Size-$d.FreeSpace)/1GB,1)
-            $freePct = if($d.Size -gt 0){ [math]::Round($d.FreeSpace*100.0/$d.Size,1) }else{0}
-            $status  = if($freePct -le 10){"CRITICAL - Disk nearly full"}elseif($freePct -le 20){"WARNING - Low space"}else{"OK"}
-            $r=$driveDT.NewRow()
-            $r["Drive"]=$d.DeviceID; $r["Total GB"]=$totalGB; $r["Free GB"]=$freeGB
-            $r["Used GB"]=$usedGB; $r["Free %"]=$freePct; $r["Status"]=$status
-            [void]$driveDT.Rows.Add($r)
+            $totalGB=[math]::Round($d.Size/1GB,1); $freeGB=[math]::Round($d.FreeSpace/1GB,1)
+            $usedGB=[math]::Round(($d.Size-$d.FreeSpace)/1GB,1)
+            $freePct=if($d.Size -gt 0){[math]::Round($d.FreeSpace*100.0/$d.Size,1)}else{0}
+            $status=if($freePct -le 10){"CRITICAL - Disk nearly full"}elseif($freePct -le 20){"WARNING - Low space"}else{"OK"}
+            $r=$driveDT.NewRow(); $r["Drive"]=$d.DeviceID; $r["Total GB"]=$totalGB; $r["Free GB"]=$freeGB
+            $r["Used GB"]=$usedGB; $r["Free %"]=$freePct; $r["Status"]=$status; [void]$driveDT.Rows.Add($r)
         }
         Bind-Grid $script:gDrive $driveDT
     } catch {
-        $errDT = New-Object System.Data.DataTable; [void]$errDT.Columns.Add("Error"); $r=$errDT.NewRow(); $r["Error"]=$_.Exception.Message; [void]$errDT.Rows.Add($r)
+        $errDT=New-Object System.Data.DataTable; [void]$errDT.Columns.Add("Error")
+        $r=$errDT.NewRow(); $r["Error"]=$_.Exception.Message; [void]$errDT.Rows.Add($r)
         Bind-Grid $script:gDrive $errDT
     }
     Bind-Grid $script:gDBFiles  (Invoke-SqlQuery $Q_DBFiles)
     Bind-Grid $script:gTmpChk   (Invoke-SqlQuery $Q_TempDBChecks)
     Bind-Grid $script:gTmpFiles (Invoke-SqlQuery $Q_TempDBFiles)
+    Set-Status "Sessions refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # Tab 6 - Indexes & Memory
+function Refresh-TabIndexesMem {
+    if(-not $script:connected){return}
+    $selDB = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
     Bind-Grid $script:gMissIdx   (Invoke-SqlQuery $Q_MissingIndexes)
-    $selDB2 = if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-    $script:idxUnusedHdr.Text = "  Unused / Redundant Indexes — DB: $selDB2"
-    Bind-Grid $script:gUnusedIdx (Invoke-SqlQuery "USE [$selDB2]; $Q_UnusedIndexes")
-    Bind-Grid $script:gMemChk    (Invoke-SqlQuery $Q_MemoryPressure)
-    Bind-Grid $script:gBufDB     (Invoke-SqlQuery $Q_BufferByDB)
-    Bind-Grid $script:gClerks    (Invoke-SqlQuery $Q_MemoryClerks)
+    $script:idxUnusedHdr.Text = "  Unused / Redundant Indexes — DB: $selDB"
+    Bind-Grid $script:gUnusedIdx (Invoke-SqlQuery "USE [$selDB]; $Q_UnusedIndexes")
+    $dtMem=Invoke-SqlQuery $Q_MemoryPressure; Bind-Grid $script:gMemChk $dtMem
+    if($script:loggingEnabled -and -not $dtMem.Columns.Contains("Error")){
+        $srv=EscSql $script:serverName
+        Write-ToLogDB "DELETE FROM dbo.SQLMon_Memory WHERE ServerName='$srv' AND CapturedAt>=DATEADD(minute,-2,GETDATE())"
+        foreach($r in $dtMem.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_Memory(ServerName,Metric,Value,Status) VALUES('$srv','$(EscSql $r['Metric'])','$(EscSql $r['Value'])','$(EscSql $r['Status'])')" }
+    }
+    Bind-Grid $script:gBufDB  (Invoke-SqlQuery $Q_BufferByDB)
+    Bind-Grid $script:gClerks (Invoke-SqlQuery $Q_MemoryClerks)
+    Set-Status "Indexes & Memory refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # Tab 7 - Security & Locks
+function Refresh-TabSecurity {
+    if(-not $script:connected){return}
     Bind-Grid $script:gLongTxn  (Invoke-SqlQuery $Q_LongTxns)
     Bind-Grid $script:gDeadlock (Invoke-SqlQuery $Q_Deadlocks)
     Bind-Grid $script:gSecChk   (Invoke-SqlQuery $Q_SecurityChecks)
     Bind-Grid $script:gSysadmin (Invoke-SqlQuery $Q_SysadminMembers)
+    Set-Status "Security refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # Tab 9 - HA & Replication
+function Refresh-TabHA {
+    if(-not $script:connected){return}
     Bind-Grid $script:gAG      (Invoke-SqlQuery $Q_AG)
     Bind-Grid $script:gLogShip (Invoke-SqlQuery $Q_LogShipping)
     Bind-Grid $script:gRepl    (Invoke-SqlQuery $Q_Replication)
+    Set-Status "HA & Replication refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # Tab 10 - Error Log
+function Refresh-TabErrorLog {
+    if(-not $script:connected){return}
     Bind-Grid $script:gErrLog   (Invoke-SqlQuery $Q_ErrorLog)
     Bind-Grid $script:gFailLogin (Invoke-SqlQuery $Q_FailedLogins)
+    Set-Status "Error Log refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # Tab 11 - Capacity
+function Refresh-TabCapacity {
+    if(-not $script:connected){return}
+    $srv = EscSql $script:serverName
     $dtSizes=Invoke-SqlQuery $Q_DBSizes; Bind-Grid $script:gDBSizes $dtSizes
     if($script:loggingEnabled -and -not $dtSizes.Columns.Contains("Error") -and (Should-LogStatic "DBSize")){
         Write-ToLogDB "DELETE FROM dbo.SQLMon_DBSize WHERE ServerName='$srv' AND CaptureDate=CAST(GETDATE() AS DATE)"
@@ -2546,18 +2499,73 @@ function Refresh-All {
     }
     Bind-Grid $script:gAutoGrow (Invoke-SqlQuery $Q_AutoGrowth)
     Bind-Grid $script:gVLF      (Invoke-SqlQuery $Q_VLF)
-    $selDB3=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-    $script:statsHdrLbl.Text="  Statistics Health — stale stats cause bad query plans   DB: $selDB3"
-    Bind-Grid $script:gStats (Invoke-SqlQuery (Get-StatsHealthQuery $selDB3))
+    $selDB=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
+    $script:statsHdrLbl.Text="  Statistics Health — stale stats cause bad query plans   DB: $selDB"
+    Bind-Grid $script:gStats (Invoke-SqlQuery (Get-StatsHealthQuery $selDB))
+    Set-Status "Capacity refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
 
-    # Tab 12 - Query Store
-    $selDB4=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
-    $script:qsTopHdr.Text="  Top 20 Queries by CPU (last 24h) — DB: $selDB4   requires SQL 2016+  Query Store must be ON"
-    Bind-Grid $script:gQSTop (Invoke-SqlQuery (Get-QSTopQuery $selDB4))
-    Bind-Grid $script:gQSReg (Invoke-SqlQuery (Get-QSRegressedQuery $selDB4))
+function Refresh-TabQueryStore {
+    if(-not $script:connected){return}
+    $selDB=if($cmbDB.SelectedItem){"$($cmbDB.SelectedItem)"}else{"master"}
+    $script:qsTopHdr.Text="  Top 20 Queries by CPU (last 24h) — DB: $selDB   requires SQL 2016+  Query Store must be ON"
+    Bind-Grid $script:gQSTop (Invoke-SqlQuery (Get-QSTopQuery $selDB))
+    Bind-Grid $script:gQSReg (Invoke-SqlQuery (Get-QSRegressedQuery $selDB))
+    Set-Status "Query Store refreshed: $(Get-Date -F 'HH:mm:ss')" "LightGreen"
+}
+
+# ── Live-only refresh (called by timer) — CPU, active queries, waits, blocking ─
+function Refresh-Live {
+    if(-not $script:connected){return}
+    $srv = EscSql $script:serverName
+
+    if($script:loggingEnabled){
+        $dtCPUNow=Invoke-SqlQuery $Q_CPU
+        if(-not $dtCPUNow.Columns.Contains("Error") -and $dtCPUNow.Rows.Count -gt 0){
+            $r=$dtCPUNow.Rows[0]; Write-ToLogDB "INSERT INTO dbo.SQLMon_CPU(ServerName,SQLCPUPct,OtherCPUPct,IdlePct) VALUES('$srv',$($r['SQL CPU %']),$($r['Other CPU %']),$($r['Idle %']))"
+        }
+    }
+    $dcHist = Invoke-SqlQuery $Q_CPUHistory
+    if($dcHist.Rows.Count -gt 0 -and -not $dcHist.Columns.Contains("Error")){
+        $script:cpuHistory.Clear(); $script:cpuTimes.Clear()
+        $rows = @($dcHist.Rows); [array]::Reverse($rows)
+        foreach($rh in $rows){
+            $script:cpuHistory.Add(@([int]"$($rh['SQL CPU %'])",[int]"$($rh['Other CPU %'])"))
+            try{ $script:cpuTimes.Add(([datetime]$rh['Recorded At']).ToString('HH:mm:ss')) }catch{ $script:cpuTimes.Add("") }
+        }
+        $lr=$dcHist.Rows[0]
+        $script:lSql.Text="SQL CPU: $($lr['SQL CPU %'])%"; $script:lOth.Text="Other: $($lr['Other CPU %'])%"; $script:lIdl.Text="Idle: $($lr['Idle %'])%"
+        $script:cpuHdrLbl.Text="  CPU History — $($script:cpuHistory.Count) snapshots   BLUE=SQL Server  ORANGE=Other processes   now: SQL $($lr['SQL CPU %'])%  Other $($lr['Other CPU %'])%  Idle $($lr['Idle %'])%"
+        $script:cpuChart.Invalidate()
+    }
+    Bind-Grid $script:gReq (Invoke-SqlQuery $Q_ActiveReqs)
+
+    $dtWait=Invoke-SqlQuery $Q_WaitStats; Bind-Grid $script:gWait $dtWait
+    if($script:loggingEnabled -and -not $dtWait.Columns.Contains("Error")){
+        Write-ToLogDB "DELETE FROM dbo.SQLMon_WaitStats WHERE ServerName='$srv' AND CapturedAt>=DATEADD(minute,-2,GETDATE())"
+        foreach($r in $dtWait.Rows){ Write-ToLogDB "INSERT INTO dbo.SQLMon_WaitStats(ServerName,WaitType,WaitCount,TotalWaitSec,MaxWaitSec) VALUES('$srv','$(EscSql $r['Wait Type'])',$($r['Wait Count']),$($r['Total Wait Sec']),$($r['Max Wait Sec']))" }
+    }
+    Bind-Grid $script:gBlk (Invoke-SqlQuery $Q_Blocking)
 
     if($script:loggingEnabled){ $script:logStatusLbl.Text=" Last logged: $(Get-Date -F 'HH:mm:ss')" }
-    Set-Status "Last refresh: $(Get-Date -Format 'HH:mm:ss')   Connected to: $($txtSrv.Text)" "LightGreen"
+    Set-Status "Live refresh: $(Get-Date -Format 'HH:mm:ss')   Connected to: $($txtSrv.Text)" "LightGreen"
+}
+
+function Refresh-All {
+    if(-not $script:connected){return}
+    Set-Status "Refreshing all tabs..." "Yellow"; $form.Refresh()
+    Refresh-TabConfig
+    Refresh-Live
+    Refresh-TabBackups
+    Refresh-TabQueriesIO
+    Refresh-TabSessions
+    Refresh-TabIndexesMem
+    Refresh-TabSecurity
+    Refresh-TabHA
+    Refresh-TabErrorLog
+    Refresh-TabCapacity
+    Refresh-TabQueryStore
+    Set-Status "Full refresh: $(Get-Date -Format 'HH:mm:ss')   Connected to: $($txtSrv.Text)" "LightGreen"
 }
 
 $btnConn.add_Click({
@@ -2616,14 +2624,14 @@ $cmbRef.add_SelectedIndexChanged({
     if($sec-gt 0){
         $script:timer=New-Object System.Windows.Forms.Timer
         $script:timer.Interval=$sec*1000
-        $script:timer.add_Tick({Refresh-All})
+        $script:timer.add_Tick({Refresh-Live})
         $script:timer.Start()
     }
 })
 
 $script:timer=New-Object System.Windows.Forms.Timer
 $script:timer.Interval=30000
-$script:timer.add_Tick({Refresh-All})
+$script:timer.add_Tick({Refresh-Live})
 $script:timer.Start()
 
 [System.Windows.Forms.Application]::Run($form)
